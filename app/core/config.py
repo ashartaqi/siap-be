@@ -25,9 +25,13 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB_NAME: str
 
+    SECRET_KEY: str
+    ALGORITHM :str
+    ACCESS_TOKEN_EXPIRE_MINUTES :int
+
     @computed_field
     @property
-    def sqlalchemy_database_uri(self) -> PostgresDsn:
+    def sqlalchemy_database_uri(self) -> MultiHostUrl:
         return MultiHostUrl.build(
             scheme="postgresql+psycopg2",
             username=self.POSTGRES_USER,
