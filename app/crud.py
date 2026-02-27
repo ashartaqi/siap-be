@@ -1,14 +1,20 @@
 from sqlalchemy.orm import Session
 from app.core.security import verify_password, get_password_hash
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException, status
 from app.models import User
 
 
 def create_user(db: Session, username: str, email: str, password: str):
     hashed_pw = get_password_hash(password)
     user = User(username=username, email=email, password=hashed_pw)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Username or email already exists")
     return user
 
 
