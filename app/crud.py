@@ -5,9 +5,9 @@ from fastapi import HTTPException, status
 from app.models import User
 
 
-def create_user(db: Session, username: str, email: str, password: str):
+def create_user(db: Session, username: str, email: str, password: str, super_user: bool = False):
     hashed_pw = get_password_hash(password)
-    user = User(username=username, email=email, password=hashed_pw)
+    user = User(username=username, email=email, password=hashed_pw, super_user=super_user)
     try:
         db.add(user)
         db.commit()

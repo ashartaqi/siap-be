@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, func
 from app.core.db import Base
 
 class User(Base):
@@ -7,5 +7,5 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     password = Column(String)
-
-
+    created_at = Column(DateTime, default=func.now())
+    super_user = Column(Boolean, default=False)
