@@ -9,3 +9,17 @@ class User(Base):
     password = Column(String)
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
+
+class League(Base):
+    __tablename__ = "leagues"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    country = Column(String, index=True)
+    #can add logo
+
+class Player(Base):
+    __tablename__ = "players"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    country = Column(String, index=True)
+    league = Column(Integer, index=True) #will store league id in League class
