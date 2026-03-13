@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ALGORITHM :str
     ACCESS_TOKEN_EXPIRE_MINUTES :int
 
+    FOOTBALL_DATA_API_KEY: str
+
     @computed_field
     @property
     def sqlalchemy_database_uri(self) -> MultiHostUrl:
