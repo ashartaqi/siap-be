@@ -13,8 +13,19 @@ class User(Base):
 
 class Club(Base):
     __tablename__ = "club"
-    id = Column(Integer, primary_key=True, index=True)
 
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    league_name = Column(String, index=True)
+    nationality_name = Column(String, index=True)
+
+    overall = Column(Integer, index=True)
+    attack = Column(Integer, index=True)
+    midfield = Column(Integer, index=True)
+    defence = Column(Integer, index=True)
+
+    home_stadium = Column(String, index=True)
+    captain = Column(String, index=True)
 
 class Player(Base):
     __tablename__ = "players"
