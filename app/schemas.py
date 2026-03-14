@@ -24,3 +24,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class Leagues(BaseModel):
+    id: int
+    name: str
+    country: str
