@@ -3,20 +3,25 @@ from sqlalchemy import text
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs
+
+
+# USERS
+def create(db: Session, model_item, error_msg: str = "Item already exists or an error occured"):
+    try:
+        db.add(model_item)
+        db.commit()
+        db.refresh(model_item)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+    return model_item
 
 
 def create_user(db: Session, username: str, email: str, password: str, super_user: bool = False):
     hashed_pw = get_password_hash(password)
     user = User(username=username, email=email, password=hashed_pw, super_user=super_user)
-    try:
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Username or email already exists")
-    return user
+    return create(db, user, "Username or email already exists")
 
 
 def authenticate_user(db: Session, email: str, password: str):
@@ -25,6 +30,7 @@ def authenticate_user(db: Session, email: str, password: str):
         return user
     return None
 
+# TEAMS
 def get_teams(
     db: Session, skip: int = 0,
     limit: int = 100,
@@ -58,6 +64,25 @@ def get_teams(
 
     return query.offset(skip).limit(limit).all()
 
+
+def add_fav_team(db, user, team):
+    fav_team = FavouriteClubs(user_id=user, club_id=team)
+    return create(db, fav_team, "Favourite either exists or there was a error")
+
+
+def get_fav_teams(db, user):
+    return db.query(Club).join(FavouriteClubs, FavouriteClubs.club_id == Club.id).filter(FavouriteClubs.user_id == user).all()
+
+
+def remove_fav_team(db, user, team):
+    deleted = db.query(FavouriteClubs).filter(
+        FavouriteClubs.user_id == user,
+        FavouriteClubs.club_id == team
+    ).delete()
+    db.commit()
+    return deleted > 0
+
+# PLAYERS
 def get_players(
     db: Session,
     limit: int = 11,
@@ -77,7 +102,7 @@ def get_players(
         query = query.filter(Player.club_team_id == team_id)
     if name:
         query = query.filter(
-            Player.short_name.ilike(f"%{name}%") | 
+            Player.short_name.ilike(f"%{name}%") |
             Player.long_name.ilike(f"%{name}%")
         )
     if nationality_name:
@@ -96,3 +121,22 @@ def get_players(
         query = query.filter(Player.preferred_foot.ilike(preferred_foot))
 
     return query.limit(limit).all()
+
+
+def add_fav_player(db, user, player):
+    fav_player = FavouritePlayers(user_id=user, player_id=player)
+    return create(db, fav_player, "Favourite either exists or there was a error")
+
+
+def get_fav_players(db, user):
+    return db.query(Player).join(FavouritePlayers, FavouritePlayers.player_id == Player.id).filter(FavouritePlayers.user_id == user).all()
+
+
+def remove_fav_player(db, user, player):
+    deleted = db.query(FavouritePlayers).filter(
+        FavouritePlayers.user_id == user,
+        FavouritePlayers.player_id == player
+    ).delete()
+
+    db.commit()
+    return deleted > 0
