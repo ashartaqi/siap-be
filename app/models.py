@@ -27,6 +27,7 @@ class Club(Base):
     home_stadium = Column(String, index=True)
     captain = Column(String, index=True)
 
+
 class Player(Base):
     __tablename__ = "players"
     id = Column(Integer, primary_key=True, index=True)
@@ -58,3 +59,18 @@ class Player(Base):
     physic = Column(Integer, index=True)
 
     player_face_url = Column(String, index=True)
+    
+    
+class FavouriteClubs(Base):
+    __tablename__ = "favourite_clubs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    club_id = Column(Integer, ForeignKey("club.id", ondelete="CASCADE"))
+    
+    
+class FavouritePlayers(Base):
+    __tablename__ = "favourite_players"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
+    
