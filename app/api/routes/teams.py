@@ -42,4 +42,4 @@ def remove_favourite(db: Session = Depends(get_db),current_user: User = Depends(
     if team:
         result = crud.remove_fav_team(db, current_user.id, team)
         return {"success": result}
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Player ID is required")
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Team ID is required")
