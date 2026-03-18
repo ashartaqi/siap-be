@@ -74,3 +74,14 @@ class FavouritePlayers(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
     
+class Match(Base):
+    __tablename__ = "matches"
+    id = Column(Integer, primary_key=True, index=True)
+    round = Column(String, nullable=True)
+    date = Column(String, nullable=False)
+    time = Column(String, nullable=True)
+    team1 = Column(String, nullable=False)
+    team2 = Column(String, nullable=False)
+    score_ft = Column(String, nullable=True)
+    winner = Column(String, nullable=True)
+    league = Column(String, nullable=True)
