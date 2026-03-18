@@ -140,4 +140,5 @@ def import_matches():
 
 
 if __name__ == "__main__":
+    # run the file - python3 -m app.scripts.transfer_matches
     import_matches()

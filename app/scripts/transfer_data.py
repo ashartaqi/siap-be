@@ -3,7 +3,6 @@ from app.core.db import SessionLocal
 from app.models import Player, Club
 import os
 
-#run the file - python3 -m app.scripts.transfer_data
 
 CSV_FILE_TEAMS = os.path.join(os.path.dirname(__file__), "male_teams.csv")
 COLUMNS_TEAMS = [
@@ -154,5 +153,6 @@ def import_players():
         db.close()
 
 if __name__ == "__main__":
+    # run the file - python3 -m app.scripts.transfer_data
     import_teams()
     import_players()
