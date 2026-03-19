@@ -61,6 +61,39 @@ class Player(Base):
     physic = Column(Integer, index=True)
 
     player_face_url = Column(String, index=True)
+
+class Goalkeeper(Base):
+    __tablename__ = "goalkeepers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    short_name = Column(String, index=True)
+    long_name = Column(String, index=True)
+    player_positions = Column(String, index=True)
+    overall = Column(Integer, index=True)
+    age = Column(Integer, index=True)
+    dob = Column(DateTime, index=True)
+    height_cm = Column(Integer, index=True)
+    weight_kg = Column(Integer, index=True)
+
+    club_team_id = Column(Integer, ForeignKey("club.id", ondelete="CASCADE"))
+    club_name = Column(String, index=True)
+
+    nationality_id = Column(Integer, index=True)
+    nationality_name = Column(String, index=True)
+
+    preferred_foot = Column(String, index=True)
+    weak_foot = Column(Integer, index=True)
+    skill_moves = Column(Integer, index=True)
+    work_rate = Column(String, index=True)
+
+    goalkeeping_diving = Column(Integer, index=True)
+    goalkeeping_handling = Column(Integer, index=True)
+    goalkeeping_kicking = Column(Integer, index=True)
+    goalkeeping_positioning = Column(Integer, index=True)
+    goalkeeping_reflexes = Column(Integer, index=True)
+    goalkeeping_speed = Column(Integer, index=True)
+
+    player_face_url = Column(String, index=True)
     
     
 class FavouriteClubs(Base):
