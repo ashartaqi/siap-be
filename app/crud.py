@@ -18,9 +18,9 @@ def create(db: Session, model_item, error_msg: str = "Item already exists or an 
     return model_item
 
 
-def create_user(db: Session, username: str, email: str, password: str, super_user: bool = False):
+def create_user(db: Session, username: str, email: str, first_name: str, last_name: str, password: str, super_user: bool = False):
     hashed_pw = get_password_hash(password)
-    user = User(username=username, email=email, password=hashed_pw, super_user=super_user)
+    user = User(username=username, email=email,first_name=first_name, last_name=last_name, password=hashed_pw, super_user=super_user)
     return create(db, user, "Username or email already exists")
 
 

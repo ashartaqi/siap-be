@@ -6,6 +6,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
+    first_name = Column(String, index=True)
+    last_name = Column(String, index=True)
     password = Column(String)
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
