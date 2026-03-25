@@ -9,7 +9,7 @@ from app.schemas import Players
 
 router = APIRouter()
 
-@router.post("/getPlayers", response_model=list[Players])
+@router.get("/", response_model=list[Players])
 def get_players(
     db: Session = Depends(get_db),
     limit: int = 11,
@@ -23,35 +23,15 @@ def get_players(
     max_age: int = None,
     preferred_foot: str = None
 ):
-    players = crud.get_players(
-        db, limit, team_id, name, nationality_name, position,
-        min_overall, max_overall, min_age, max_age, preferred_foot
-    )
-
-    # 2️⃣ Map to frontend-friendly keys (response_model)
-    print (players[0])
-
-    result = []
-    for p in players:
-        result.append(
-            Players(
-                name=p.short_name,  # or p.long_name
-                position=p.player_positions,
-                club=p.club_name or "",  # <-- use club_name directly
-                nation=p.nationality_name or "",
-                foot=p.preferred_foot or "",
-                overall=p.overall or 0,
-                age=p.age or 0,
-                pace=p.pace or 0,
-                shooting=p.shooting or 0,
-                passing=p.passing or 0,
-                dribbling=p.dribbling or 0,
-                defending=p.defending or 0,
-                physic=p.physic or 0
-            )
+    try:
+        players = crud.get_players(
+            db, limit, team_id, name, nationality_name, position,
+            min_overall, max_overall, min_age, max_age, preferred_foot
         )
+        return players
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
 
-    return result
 
 @router.post("/fav")
 def add_favourite(db: Session = Depends(get_db),current_user: User = Depends(get_current_user), player: int = None):
