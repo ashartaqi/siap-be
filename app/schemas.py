@@ -3,6 +3,7 @@ Pydantic schemas for data validation and serialization.
 Used for request bodies and response models in API routes.
 """
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict
 
 class UserLogin(BaseModel):
@@ -46,3 +47,41 @@ class Token(BaseModel):
     token: str
     token_type: str
     
+
+
+class Players(BaseModel):
+    id: Optional[int]
+
+    short_name: str
+    long_name: str
+    player_positions: str
+
+    overall: int
+    age: int
+    dob: Optional[datetime] = None
+
+    height_cm: int
+    weight_kg: int
+
+    club_team_id: int
+    club_name: str
+
+    nationality_id: int
+    nationality_name: str
+
+    preferred_foot: str
+    weak_foot: int
+    skill_moves: int
+    work_rate: Optional[str] = None
+
+    pace: Optional[int] = None
+    shooting: Optional[int] = None
+    passing: Optional[int] = None
+    dribbling: Optional[int] = None
+    defending: Optional[int] = None
+    physic: Optional[int] = None
+
+    player_face_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
