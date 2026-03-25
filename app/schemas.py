@@ -46,3 +46,21 @@ class Token(BaseModel):
     token: str
     token_type: str
     
+
+class Players(BaseModel):
+    name: str
+    position: str
+    overall: int
+    age: int
+    club: str
+    nation: str
+    foot: str
+    pace: int
+    shooting: int
+    passing: int
+    dribbling: int
+    defending: int
+    physic: int
+
+    class Config:
+        orm_mode = True
