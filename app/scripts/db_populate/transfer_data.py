@@ -208,7 +208,7 @@ def import_goalkeepers():
         db.close()
 
 if __name__ == "__main__":
-    #run the script - python3 -m app.scripts.transfer_data
+    #run the script - python3 -m app.scripts.db_populate.transfer_data
     import_teams()
     import_players()
     import_goalkeepers()

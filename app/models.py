@@ -108,7 +108,8 @@ class FavouritePlayers(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"))
-    
+
+# Legacy table for older matches
 class Match(Base):
     __tablename__ = "matches"
     id = Column(Integer, primary_key=True, index=True)
@@ -120,3 +121,41 @@ class Match(Base):
     score_ft = Column(String, nullable=True)
     winner = Column(String, nullable=True)
     league = Column(String, nullable=True)
+
+
+class Fixtures(Base):
+    __tablename__ = "fixtures"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, nullable=False)
+    home_team = Column(String, nullable=False)
+    away_team = Column(String, nullable=False)
+    league = Column(String, nullable=True)
+    status = Column(String, nullable=True)
+    away_team_score = Column(String, nullable=True)
+    home_team_score = Column(String, nullable=True)
+    winner = Column(String, nullable=True)
+
+
+class Votes(Base):
+    __tablename__ = "votes"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    fixture_id = Column(Integer, ForeignKey("fixtures.id", ondelete="CASCADE"))
+    prediction_away_score = Column(Integer, nullable=False)
+    prediction_home_score = Column(Integer, nullable=False)
+
+
+class LeagueStandings(Base):
+    __tablename__ = "league_standings"
+    id = Column(Integer, primary_key=True, index=True)
+    position = Column(Integer, nullable=False)
+    team_name = Column(String, nullable=False)
+    points = Column(Integer, nullable=False)
+    played_games = Column(Integer, nullable=False)
+    won = Column(Integer, nullable=False)
+    draw = Column(Integer, nullable=False)
+    lost = Column(Integer, nullable=False)
+    goals_for = Column(Integer, nullable=False)
+    goals_against = Column(Integer, nullable=False)
+    goal_difference = Column(Integer, nullable=False)
+    league = Column(String, nullable=False)

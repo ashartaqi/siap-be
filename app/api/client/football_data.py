@@ -14,11 +14,11 @@ class FootballDataClient:
 
     BASE_URL = "https://api.football-data.org/v4"
 
-    def __init__(self, api_key: str = settings.FOOTBALL_DATA_API_KEY):
-        self.api_key = api_key
+    def __init__(self):
+        self.api_key = settings.FOOTBALL_DATA_API_KEY
         self.headers = {"X-Auth-Token": self.api_key}
 
-    # ── Request helper ──────────────────────────────────────────────
+    # ── Request client ──────────────────────────────────────────────
 
     def get(self, path: str, params: dict | None = None) -> dict:
         url = f"{self.BASE_URL}{path}"
