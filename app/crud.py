@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, Goalkeeper
 
 
 # USERS
@@ -120,7 +120,47 @@ def get_players(
     if preferred_foot:
         query = query.filter(Player.preferred_foot.ilike(preferred_foot))
 
-    return query.limit(limit).all()
+    return query.order_by(desc(Player.overall)).limit(limit).all()
+
+# GOALKEEPERS
+def get_goalkeepers(
+    db: Session,
+    limit: int = 11,
+    team_id: int = None,
+    name: str = None,
+    nationality_name: str = None,
+    position: str = None,
+    min_overall: int = None,
+    max_overall: int = None,
+    min_age: int = None,
+    max_age: int = None,
+    preferred_foot: str = None
+):
+    query = db.query(Goalkeeper)
+
+    if team_id:
+        query = query.filter(Goalkeeper.club_team_id == team_id)
+    if name:
+        query = query.filter(
+            Goalkeeper.short_name.ilike(f"%{name}%") |
+            Goalkeeper.long_name.ilike(f"%{name}%")
+        )
+    if nationality_name:
+        query = query.filter(Goalkeeper.nationality_name.ilike(nationality_name))
+    if position:
+        query = query.filter(Goalkeeper.player_positions.ilike(f"%{position}%"))
+    if min_overall:
+        query = query.filter(Goalkeeper.overall >= min_overall)
+    if max_overall:
+        query = query.filter(Goalkeeper.overall <= max_overall)
+    if min_age:
+        query = query.filter(Goalkeeper.age >= min_age)
+    if max_age:
+        query = query.filter(Goalkeeper.age <= max_age)
+    if preferred_foot:
+        query = query.filter(Goalkeeper.preferred_foot.ilike(preferred_foot))
+
+    return query.order_by(desc(Goalkeeper.overall)).limit(limit).all()
 
 
 def add_fav_player(db, user, player):
