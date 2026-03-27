@@ -86,6 +86,48 @@ class Players(BaseModel):
     class Config:
         from_attributes = True
 
+class Votes(BaseModel):
+    id: int
+    user_id: int
+    fixture_id: int
+    prediction_away_score: int
+    prediction_home_score: int
+
+    class Config:
+        from_attributes = True
+
+class Fixtures(BaseModel):
+    id: int
+    date: str
+    home_team: str
+    away_team: str
+    league: Optional[str] = None
+    status: Optional[str] = None
+    away_team_score: Optional[str] = None
+    home_team_score: Optional[str] = None
+    winner: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LeagueStandings(BaseModel):
+    id: int
+    position: int
+    team_name: str
+    points: int
+    played_games: int
+    won: int
+    draw: int
+    lost: int
+    goals_for: int
+    goals_against: int
+    goal_difference: int
+    league: str
+
+    class Config:
+        from_attributes = True
+
 
 class Goalkeepers(BaseModel):
     id: Optional[int]

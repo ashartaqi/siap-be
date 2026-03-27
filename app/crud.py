@@ -3,7 +3,7 @@ from sqlalchemy import text, desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, Goalkeeper
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, Goalkeeper, LeagueStandings, Votes, Fixtures
 
 
 # USERS
@@ -180,3 +180,92 @@ def remove_fav_player(db, user, player):
 
     db.commit()
     return deleted > 0
+
+# FIXTURES
+def get_fixtures(
+    db: Session,
+    limit: int = 11,
+    league: str = None,
+    status_filter: str = None,
+    home_team: str = None,
+    away_team: str = None,
+    date: str = None
+):
+    query = db.query(Fixtures)
+    
+    if league:
+        query = query.filter(Fixtures.league == league)
+    if status_filter:
+        query = query.filter(Fixtures.status == status_filter)
+    if home_team:
+        query = query.filter(Fixtures.home_team.ilike(f"%{home_team}%"))
+    if away_team:
+        query = query.filter(Fixtures.away_team.ilike(f"%{away_team}%"))
+    if date:
+        query = query.filter(Fixtures.date == date)
+    
+    return query.limit(limit).all()
+
+
+def get_standings(
+    db: Session,
+    limit: int = 20,
+    league: str = None,
+    team_name: str = None
+):
+    query = db.query(LeagueStandings)
+    
+    if league:
+        query = query.filter(LeagueStandings.league == league)
+    if team_name:
+        query = query.filter(LeagueStandings.team_name.ilike(f"%{team_name}%"))
+    
+    return query.order_by(LeagueStandings.position).limit(limit).all()
+
+
+def get_votes(
+    db: Session,
+    limit: int = 11,
+    fixture_id: int = None
+):
+    query = db.query(Votes)
+    
+    if fixture_id:
+        query = query.filter(Votes.fixture_id == fixture_id)
+    
+    return query.limit(limit).all()
+
+
+def create_vote(
+    db: Session,
+    user_id: int,
+    fixture_id: int,
+    prediction_home_score: int,
+    prediction_away_score: int,
+):
+    vote = Votes(
+        user_id=user_id,
+        fixture_id=fixture_id,
+        prediction_home_score=prediction_home_score,
+        prediction_away_score=prediction_away_score,
+    )
+    db.add(vote)
+    db.commit()
+    db.refresh(vote)
+    return vote
+
+
+def get_user_votes(db: Session, user_id: int):
+    return db.query(Votes).filter(Votes.user_id == user_id).all()
+
+
+def delete_vote(db: Session, user_id: int, vote_id: int):
+    vote = db.query(Votes).filter(
+        Votes.id == vote_id,
+        Votes.user_id == user_id
+    ).first()
+    if vote:
+        db.delete(vote)
+        db.commit()
+        return True
+    return False
