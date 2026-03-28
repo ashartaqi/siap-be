@@ -4,7 +4,7 @@ Used for request bodies and response models in API routes.
 """
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
 
 class UserLogin(BaseModel):
     email: str
@@ -165,3 +165,135 @@ class Goalkeepers(BaseModel):
 
     class Config:
         from_attributes = True
+
+VALID_POSITIONS = {"DEF", "MID", "FWD"}
+VALID_FEET      = {"Left", "Right"}
+
+class CustomPlayerCreate(BaseModel):
+    name:           str
+    position:       str
+    nationality:    str
+    shirt_number:   int
+    preferred_foot: str
+    pace:           int
+    shooting:       int
+    passing:        int
+    dribbling:      int
+    defending:      int
+    physic:         int
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Name cannot be empty")
+        if len(v) > 100:
+            raise ValueError("Name too long (max 100 chars)")
+        return v
+
+    @field_validator("position")
+    @classmethod
+    def valid_position(cls, v):
+        v = v.upper()
+        if v not in VALID_POSITIONS:
+            raise ValueError(f"Position must be one of {VALID_POSITIONS}")
+        return v
+
+    @field_validator("nationality")
+    @classmethod
+    def nationality_not_empty(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Nationality cannot be empty")
+        return v
+
+    @field_validator("shirt_number")
+    @classmethod
+    def valid_shirt(cls, v):
+        if not (1 <= v <= 99):
+            raise ValueError("Shirt number must be between 1 and 99")
+        return v
+
+    @field_validator("preferred_foot")
+    @classmethod
+    def valid_foot(cls, v):
+        v = v.capitalize()
+        if v not in VALID_FEET:
+            raise ValueError("Preferred foot must be 'Left' or 'Right'")
+        return v
+
+    @field_validator("pace", "shooting", "passing", "dribbling", "defending", "physic")
+    @classmethod
+    def stat_in_range(cls, v):
+        if not (1 <= v <= 99):
+            raise ValueError("Each stat must be between 1 and 99")
+        return v
+
+    @model_validator(mode="after")
+    def check_total(self):
+        total = self.pace + self.shooting + self.passing + self.dribbling + self.defending + self.physic
+        if total > 570:
+            raise ValueError(f"Total cannot exceed 570. You used {total}.")
+        return self
+
+
+class CustomPlayerUpdate(BaseModel):
+    position:       Optional[str] = None
+    shirt_number:   Optional[int] = None
+    preferred_foot: Optional[str] = None
+    pace:           Optional[int] = None
+    shooting:       Optional[int] = None
+    passing:        Optional[int] = None
+    dribbling:      Optional[int] = None
+    defending:      Optional[int] = None
+    physic:         Optional[int] = None
+
+    @field_validator("position")
+    @classmethod
+    def valid_position(cls, v):
+        if v is not None and v.upper() not in {"DEF", "MID", "FWD"}:
+            raise ValueError("Invalid position")
+        return v.upper() if v else v
+
+    @field_validator("shirt_number")
+    @classmethod
+    def valid_shirt(cls, v):
+        if v is not None and not (1 <= v <= 99):
+            raise ValueError("Shirt number must be between 1 and 99")
+        return v
+
+    @field_validator("preferred_foot")
+    @classmethod
+    def valid_foot(cls, v):
+        if v is not None:
+            v = v.capitalize()
+            if v not in {"Left", "Right"}:
+                raise ValueError("Preferred foot must be 'Left' or 'Right'")
+        return v
+
+    @field_validator("pace", "shooting", "passing", "dribbling", "defending", "physic")
+    @classmethod
+    def stat_in_range(cls, v):
+        if v is not None and not (1 <= v <= 99):
+            raise ValueError("Each stat must be between 1 and 99")
+        return v
+
+
+class CustomPlayerOut(BaseModel):
+    id:             int
+    user_id:        int
+    name:           str
+    position:       str
+    nationality:    str
+    shirt_number:   int
+    preferred_foot: str
+    pace:           int
+    shooting:       int
+    passing:        int
+    dribbling:      int
+    defending:      int
+    physic:         int
+    overall:        int
+
+    model_config = ConfigDict(from_attributes=True)
