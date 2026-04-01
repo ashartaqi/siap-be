@@ -1,24 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.core.security import decode_access_token
+from app.core.security import get_current_user
 from app.models import CustomPlayer, User
 from app.schemas import CustomPlayerCreate, CustomPlayerUpdate, CustomPlayerOut
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
-
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user = db.query(User).filter(User.email == payload.get("sub")).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
 
 
 def get_player_or_404(player_id: int, user_id: int, db: Session) -> CustomPlayer:
