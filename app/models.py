@@ -164,30 +164,17 @@ class LeagueStandings(Base):
 class CustomPlayer(Base):
     __tablename__ = "custom_players"
 
-    id             = Column(Integer, primary_key=True, index=True)
-    user_id        = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    name           = Column(String(100), nullable=False)
-    position       = Column(String(10), nullable=False)
-    nationality    = Column(String(100), nullable=False)
-    shirt_number   = Column(Integer, nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    name = Column(String(100), nullable=False)
+    position = Column(String(10), nullable=False)
+    nationality = Column(String(100), nullable=False)
+    shirt_number = Column(Integer, nullable=False)
     preferred_foot = Column(String(5), nullable=False)
-
-    pace      = Column(Integer, nullable=False)
-    shooting  = Column(Integer, nullable=False)
-    passing   = Column(Integer, nullable=False)
+    pace = Column(Integer, nullable=False)
+    shooting = Column(Integer, nullable=False)
+    passing = Column(Integer, nullable=False)
     dribbling = Column(Integer, nullable=False)
     defending = Column(Integer, nullable=False)
-    physic    = Column(Integer, nullable=False)
-    overall   = Column(Integer, nullable=False)
-
-    __table_args__ = (
-        CheckConstraint("pace         BETWEEN 1 AND 99", name="ck_cp_pace"),
-        CheckConstraint("shooting     BETWEEN 1 AND 99", name="ck_cp_shooting"),
-        CheckConstraint("passing      BETWEEN 1 AND 99", name="ck_cp_passing"),
-        CheckConstraint("dribbling    BETWEEN 1 AND 99", name="ck_cp_dribbling"),
-        CheckConstraint("defending    BETWEEN 1 AND 99", name="ck_cp_defending"),
-        CheckConstraint("physic       BETWEEN 1 AND 99", name="ck_cp_physic"),
-        CheckConstraint("shirt_number BETWEEN 1 AND 99", name="ck_cp_shirt_number"),
-        CheckConstraint("preferred_foot IN ('Left', 'Right')", name="ck_cp_foot"),
-        UniqueConstraint("user_id", name="uq_one_dream_player_per_user"),
-    )
+    physic = Column(Integer, nullable=False)
+    overall = Column(Integer, nullable=False)

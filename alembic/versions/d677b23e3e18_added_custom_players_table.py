@@ -1,8 +1,8 @@
-"""add custom_players table
+"""Added custom players table
 
-Revision ID: 12b528e6fccc
+Revision ID: d677b23e3e18
 Revises: 89894c529cf9
-Create Date: 2026-03-29 00:09:52.577885
+Create Date: 2026-04-10 16:37:23.978742
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '12b528e6fccc'
+revision: str = 'd677b23e3e18'
 down_revision: Union[str, Sequence[str], None] = '89894c529cf9'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -36,17 +36,9 @@ def upgrade() -> None:
     sa.Column('defending', sa.Integer(), nullable=False),
     sa.Column('physic', sa.Integer(), nullable=False),
     sa.Column('overall', sa.Integer(), nullable=False),
-    sa.CheckConstraint("preferred_foot IN ('Left', 'Right')", name='ck_cp_foot'),
-    sa.CheckConstraint('defending    BETWEEN 1 AND 99', name='ck_cp_defending'),
-    sa.CheckConstraint('dribbling    BETWEEN 1 AND 99', name='ck_cp_dribbling'),
-    sa.CheckConstraint('pace         BETWEEN 1 AND 99', name='ck_cp_pace'),
-    sa.CheckConstraint('passing      BETWEEN 1 AND 99', name='ck_cp_passing'),
-    sa.CheckConstraint('physic       BETWEEN 1 AND 99', name='ck_cp_physic'),
-    sa.CheckConstraint('shirt_number BETWEEN 1 AND 99', name='ck_cp_shirt_number'),
-    sa.CheckConstraint('shooting     BETWEEN 1 AND 99', name='ck_cp_shooting'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id', name='uq_one_dream_player_per_user')
+    sa.UniqueConstraint('user_id')
     )
     op.create_index(op.f('ix_custom_players_id'), 'custom_players', ['id'], unique=False)
     # ### end Alembic commands ###
