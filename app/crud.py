@@ -3,7 +3,7 @@ from sqlalchemy import text, desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, Goalkeeper, LeagueStandings, Votes, Fixtures
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, Goalkeeper, LeagueStandings, Votes, Fixtures, CustomPlayer
 
 
 # USERS
@@ -266,6 +266,43 @@ def delete_vote(db: Session, user_id: int, vote_id: int):
     ).first()
     if vote:
         db.delete(vote)
+        db.commit()
+        return True
+    return False
+
+
+# CUSTOM PLAYERS
+def get_custom_players(db: Session, user_id: int):
+    return db.query(CustomPlayer).filter().all()
+
+
+def get_custom_player(db: Session, user_id: int):
+    return db.query(CustomPlayer).filter(CustomPlayer.user_id == user_id).first()
+
+
+def add_custom_player(db: Session, user_id: int, **data):
+    player = CustomPlayer(user_id=user_id, **data)
+    overall = (player.pace + player.shooting + player.passing + player.dribbling + player.defending + player.physic) / 6
+    player.overall = overall
+    return create(db, player, "Error creating custom player")
+
+
+def update_custom_player(db: Session, player, **data):
+    for field, value in data.items():
+        setattr(player, field, value)
+    overall = (player.pace + player.shooting + player.passing + player.dribbling + player.defending + player.physic) / 6
+    player.overall = overall
+    db.commit()
+    db.refresh(player)
+    return player
+
+
+def delete_custom_player(db: Session, user_id: int):
+    player = db.query(CustomPlayer).filter(
+        CustomPlayer.user_id == user_id
+    ).first()
+    if player:
+        db.delete(player)
         db.commit()
         return True
     return False

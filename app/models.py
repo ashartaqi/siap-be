@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey, CheckConstraint, UniqueConstraint
 from app.core.db import Base
 
 class User(Base):
@@ -159,3 +159,22 @@ class LeagueStandings(Base):
     goals_against = Column(Integer, nullable=False)
     goal_difference = Column(Integer, nullable=False)
     league = Column(String, nullable=False)
+
+
+class CustomPlayer(Base):
+    __tablename__ = "custom_players"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    name = Column(String(100), nullable=False)
+    position = Column(String(10), nullable=False)
+    nationality = Column(String(100), nullable=False)
+    shirt_number = Column(Integer, nullable=False)
+    preferred_foot = Column(String(5), nullable=False)
+    pace = Column(Integer, nullable=False)
+    shooting = Column(Integer, nullable=False)
+    passing = Column(Integer, nullable=False)
+    dribbling = Column(Integer, nullable=False)
+    defending = Column(Integer, nullable=False)
+    physic = Column(Integer, nullable=False)
+    overall = Column(Integer, nullable=False)
