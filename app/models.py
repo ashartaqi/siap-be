@@ -28,6 +28,7 @@ class Club(Base):
 
     home_stadium = Column(String, index=True)
     captain = Column(String, index=True)
+    logo_url = Column(String, index=True)
 
 
 class Player(Base):
