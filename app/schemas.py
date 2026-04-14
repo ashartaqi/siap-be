@@ -129,43 +129,6 @@ class LeagueStandings(BaseModel):
         from_attributes = True
 
 
-class Goalkeepers(BaseModel):
-    id: Optional[int]
-
-    short_name: str
-    long_name: str
-    player_positions: str
-
-    overall: int
-    age: int
-    dob: Optional[datetime] = None
-
-    height_cm: int
-    weight_kg: int
-
-    club_team_id: int
-    club_name: str
-
-    nationality_id: int
-    nationality_name: str
-
-    preferred_foot: str
-    weak_foot: int
-    skill_moves: int
-    work_rate: Optional[str] = None
-
-    diving: Optional[int] = None
-    handling: Optional[int] = None
-    kicking: Optional[int] = None
-    positioning: Optional[int] = None
-    reflexes: Optional[int] = None
-    speed: Optional[int] = None
-
-    player_face_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
 class PlayerBase(BaseModel):
     VALID_POSITIONS: ClassVar[Set[str]] = {
         "LW", "ST", "RW", "CM", "CAM", "LM", "RM", "CF",

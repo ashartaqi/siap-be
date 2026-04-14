@@ -7,81 +7,6 @@
   },
   "item": [
     {
-      "name": "User",
-      "item": [
-        {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n\t\"username\": \"johndoe\",\n\t\"email\": \"john@example.com\",\n\t\"first_name\": \"John\",\n\t\"last_name\": \"Doe\",\n\t\"password\": \"password123\",\n\t\"confirm_password\": \"password123\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/user/register",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "user",
-                "register"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.token) {",
-                  "    pm.collectionVariables.set('bearer_token', jsonData.token);",
-                  "}"
-                ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n\t\"email\": \"l2403@lhr.nu.edu.pk\",\n\t\"password\": \"string123\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/user/login",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "user",
-                "login"
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
       "name": "Teams",
       "item": [
         {
@@ -254,75 +179,6 @@
       "name": "Players",
       "item": [
         {
-          "name": "Get Players",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/players/?limit=11",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "players",
-                ""
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "11"
-                },
-                {
-                  "key": "team_id",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "nationality_name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "position",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_overall",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "max_overall",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_age",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "max_age",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "preferred_foot",
-                  "value": "",
-                  "disabled": true
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Add Favourite Player",
           "request": {
             "auth": {
@@ -417,78 +273,12 @@
             }
           },
           "response": []
-        }
-      ]
-    },
-    {
-      "name": "Goalkeepers",
-      "item": [
+        },
         {
-          "name": "Get Goalkeepers",
+          "name": "Get Players",
           "request": {
             "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/goalkeepers/?limit=11",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "goalkeepers",
-                ""
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "11"
-                },
-                {
-                  "key": "team_id",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "nationality_name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "position",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_overall",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "max_overall",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_age",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "max_age",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "preferred_foot",
-                  "value": "",
-                  "disabled": true
-                }
-              ]
-            }
+            "header": []
           },
           "response": []
         }
@@ -843,6 +633,81 @@
               "path": [
                 "custom-player",
                 ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"username\": \"johndoe\",\n\t\"email\": \"john@example.com\",\n\t\"first_name\": \"John\",\n\t\"last_name\": \"Doe\",\n\t\"password\": \"password123\",\n\t\"confirm_password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/user/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.collectionVariables.set('bearer_token', jsonData.token);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"email\": \"l2403@lhr.nu.edu.pk\",\n\t\"password\": \"string123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/user/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "user",
+                "login"
               ]
             }
           },

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey, CheckConstraint, UniqueConstraint
+from sqlalchemy.orm import relationship
 from app.core.db import Base
 
 class User(Base):
@@ -53,49 +54,43 @@ class Player(Base):
     weak_foot = Column(Integer, index=True)
     skill_moves = Column(Integer, index=True)
     work_rate = Column(String, index=True)
-
-    pace = Column(Integer, index=True)
-    shooting = Column(Integer, index=True)
-    passing = Column(Integer, index=True)
-    dribbling = Column(Integer, index=True)
-    defending = Column(Integer, index=True)
-    physic = Column(Integer, index=True)
-
     player_face_url = Column(String, index=True)
 
-class Goalkeeper(Base):
-    __tablename__ = "goalkeepers"
-    
+    player_stats = relationship("PlayerStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
+    goalkeeper_stats = relationship("GoalkeeperStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
+
+
+class PlayerStats(Base):
+    __tablename__ = "player_stats"
+
     id = Column(Integer, primary_key=True, index=True)
-    short_name = Column(String, index=True)
-    long_name = Column(String, index=True)
-    player_positions = Column(String, index=True)
-    overall = Column(Integer, index=True)
-    age = Column(Integer, index=True)
-    dob = Column(DateTime, index=True)
-    height_cm = Column(Integer, index=True)
-    weight_kg = Column(Integer, index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, unique=True)
 
-    club_team_id = Column(Integer, ForeignKey("club.id", ondelete="CASCADE"))
-    club_name = Column(String, index=True)
+    pace = Column(Integer, nullable=True)
+    shooting = Column(Integer, nullable=True)
+    passing = Column(Integer, nullable=True)
+    dribbling = Column(Integer, nullable=True)
+    defending = Column(Integer, nullable=True)
+    physic = Column(Integer, nullable=True)
 
-    nationality_id = Column(Integer, index=True)
-    nationality_name = Column(String, index=True)
+    player = relationship("Player", back_populates="player_stats")
 
-    preferred_foot = Column(String, index=True)
-    weak_foot = Column(Integer, index=True)
-    skill_moves = Column(Integer, index=True)
-    work_rate = Column(String, index=True)
 
-    goalkeeping_diving = Column(Integer, index=True)
-    goalkeeping_handling = Column(Integer, index=True)
-    goalkeeping_kicking = Column(Integer, index=True)
-    goalkeeping_positioning = Column(Integer, index=True)
-    goalkeeping_reflexes = Column(Integer, index=True)
-    goalkeeping_speed = Column(Integer, index=True)
+class GoalkeeperStats(Base):
+    __tablename__ = "goalkeeper_stats"
 
-    player_face_url = Column(String, index=True)
-    
+    id = Column(Integer, primary_key=True, index=True)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, unique=True)
+
+    diving = Column(Integer, nullable=True)
+    handling = Column(Integer, nullable=True)
+    kicking = Column(Integer, nullable=True)
+    positioning = Column(Integer, nullable=True)
+    reflexes = Column(Integer, nullable=True)
+    speed = Column(Integer, nullable=True)
+
+    player = relationship("Player", back_populates="goalkeeper_stats")
+
     
 class FavouriteClubs(Base):
     __tablename__ = "favourite_clubs"
