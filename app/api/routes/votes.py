@@ -34,10 +34,12 @@ def create_vote(
     current_user: User = Depends(get_current_user),
     vote_data: CreateVoteRequest = Body(...)
 ):
-    return crud.create_vote(
-        db, current_user.id, vote_data.fixture_id, 
-        vote_data.prediction_home_score, vote_data.prediction_away_score
-    )
+    if vote_data.fixture_id:
+        return crud.create_vote(
+            db, current_user.id, vote_data.fixture_id,
+            vote_data.prediction_home_score, vote_data.prediction_away_score
+        )
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add fixture_id missing or invalid")
 
 
 @router.get("/")

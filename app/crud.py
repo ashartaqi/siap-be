@@ -243,16 +243,15 @@ def create_vote(
     prediction_home_score: int,
     prediction_away_score: int,
 ):
+    if db.query(Votes).filter(Votes.fixture_id == fixture_id, Votes.user_id == user_id).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vote already exists")
     vote = Votes(
         user_id=user_id,
         fixture_id=fixture_id,
         prediction_home_score=prediction_home_score,
         prediction_away_score=prediction_away_score,
     )
-    db.add(vote)
-    db.commit()
-    db.refresh(vote)
-    return vote
+    return create(db, vote, "Error creating vote")
 
 
 def get_user_votes(db: Session, user_id: int):
