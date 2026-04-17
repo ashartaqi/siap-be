@@ -58,6 +58,31 @@ class Player(Base):
 
     player_stats = relationship("PlayerStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
     goalkeeper_stats = relationship("GoalkeeperStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
+    positions = relationship("positions", back_populates="player", cascade="all, delete-orphan")
+
+
+# class PlayerPos(Base):
+#     __tablename__ = "positions"
+#     id = Column(Integer, primary_key=True, autoincrement=True) # remove and set player_id and position as primary key
+#     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
+#     position = Column(String(20), nullable=False)
+
+#     __table_args__ = (UniqueConstraint('player_id', 'position', name='uq_player_position'),)
+
+
+class PlayerPos(Base):
+    __tablename__ = "positions"
+
+    player_id = Column(
+        Integer,
+        ForeignKey("players.id", ondelete="CASCADE"),
+        primary_key=True
+    )
+
+    position = Column(
+        String(20),
+        primary_key=True
+    )
 
 
 class PlayerStats(Base):
