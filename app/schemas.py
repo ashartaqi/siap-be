@@ -2,9 +2,10 @@
 Pydantic schemas for data validation and serialization.
 Used for request bodies and response models in API routes.
 """
-from typing import Optional, ClassVar, Set
+from typing import Optional, ClassVar, Set,List,Literal
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
+
 
 class UserLogin(BaseModel):
     email: str
@@ -226,3 +227,30 @@ class CustomPlayerUpdate(PlayerBase):
 
 class CustomPlayerGet(CustomPlayerCreate):
     overall: int
+
+
+class FormationBase(BaseModel):
+    formation: Literal["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"]
+
+class DreamTeamSlotCreate(BaseModel):
+    slot_label: str
+    player_id: int
+    
+class DreamTeamCreate(FormationBase):
+    slots: List[DreamTeamSlotCreate]
+
+class DreamTeamSlotGet(BaseModel):
+    id: int
+    slot_label: str
+    player_id: int
+
+    class Config:
+        from_attributes = True
+
+class DreamTeamGet(BaseModel):
+    id: int
+    formation: str
+    slots: List[DreamTeamSlotGet]
+
+    class Config:
+        from_attributes = True

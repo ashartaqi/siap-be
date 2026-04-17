@@ -3,7 +3,7 @@ from sqlalchemy import text, desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot
 
 
 # USERS
@@ -269,3 +269,45 @@ def delete_custom_player(db: Session, user_id: int):
         db.commit()
         return True
     return False
+
+#DREAM TEAM
+def get_dream_team(db: Session, user_id: int):
+    return db.query(DreamTeam)\
+             .filter(DreamTeam.user_id == user_id)\
+             .all()
+
+def delete_dream_team(db: Session, user_id: int):
+    team = db.query(DreamTeam).filter(
+        DreamTeam.user_id == user_id
+    ).first()
+    if team:
+        db.delete(team)
+        db.commit()
+        return True
+    return False
+
+def create_dream_team(db: Session, user_id: int, formation: str, slots: list):
+    team=DreamTeam(user_id = user_id,formation=formation)
+    create(db,team)
+
+    if len(slots) != 11:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 11 slots must be provided")
+
+
+    
+    for slot in slots:
+        player = db.query(Player).filter(Player.id == slot.player_id).first()
+        if not player:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player with id {slot.player_id} ___")
+        
+        slot_row = DreamTeamSlot(
+            dream_team_id=team.id,
+            slot_label=slot.slot_label,
+            player_id=slot.player_id
+        )
+        create(db, slot_row)
+
+    return team
+
+
+    

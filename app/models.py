@@ -174,3 +174,22 @@ class CustomPlayer(Base):
     defending = Column(Integer, nullable=False)
     physic = Column(Integer, nullable=False)
     overall = Column(Integer, nullable=False)
+
+class DreamTeam(Base):
+    __tablename__ = "dream_team"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    formation = Column(String(20),nullable=False)
+    slots = relationship("DreamTeamSlot", uselist=True, cascade="all, delete-orphan")
+
+
+class DreamTeamSlot(Base):
+    __tablename__ = "dream_team_slot"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dream_team_id = Column(Integer, ForeignKey("dream_team.id", ondelete="CASCADE"), nullable=False)
+    slot_label = Column(String(10),nullable=False)
+    player_id =Column(Integer,ForeignKey("players.id",ondelete = "CASCADE"), nullable = False)
+   
+
