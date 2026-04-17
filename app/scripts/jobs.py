@@ -161,3 +161,11 @@ async def fetch_leagues():
             except Exception as e:
                 print(e)
                 db.rollback()
+
+# To run the script:
+# python3 -m app.scripts.jobs
+# if _name_ == "_main_":
+    #import asyncio
+    # asyncio.run(fetch_fixtures())
+    # asyncio.run(fetch_leagues())
+    # asyncio.run(update_fixtures())
