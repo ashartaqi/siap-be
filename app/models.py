@@ -37,7 +37,6 @@ class Player(Base):
     id = Column(Integer, primary_key=True, index=True)
     short_name = Column(String, index=True)
     long_name = Column(String, index=True)
-    player_positions = Column(String, index=True)
     overall = Column(Integer, index=True)
     age = Column(Integer, index=True)
     dob = Column(DateTime, index=True)
@@ -59,15 +58,6 @@ class Player(Base):
     player_stats = relationship("PlayerStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
     goalkeeper_stats = relationship("GoalkeeperStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
     positions = relationship("PlayerPos", back_populates="player", cascade="all, delete-orphan")
-
-
-# class PlayerPos(Base):
-#     __tablename__ = "positions"
-#     id = Column(Integer, primary_key=True, autoincrement=True) # remove and set player_id and position as primary key
-#     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
-#     position = Column(String(20), nullable=False)
-
-#     __table_args__ = (UniqueConstraint('player_id', 'position', name='uq_player_position'),)
 
 
 class PlayerPos(Base):
