@@ -2,7 +2,7 @@
 Pydantic schemas for data validation and serialization.
 Used for request bodies and response models in API routes.
 """
-from typing import Optional, ClassVar, Set
+from typing import Optional, ClassVar, Set , List
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
 
@@ -54,7 +54,7 @@ class Players(BaseModel):
 
     short_name: str
     long_name: str
-    player_positions: str
+    positions: List[PlayerPosSchema] = []
 
     overall: int
     age: int
@@ -226,3 +226,8 @@ class CustomPlayerUpdate(PlayerBase):
 
 class CustomPlayerGet(CustomPlayerCreate):
     overall: int
+
+
+class PlayerPosSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    position: str
