@@ -47,7 +47,9 @@ class Token(BaseModel):
     token: str
     token_type: str
     
-
+class PlayerPosSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    position: str
 
 class Players(BaseModel):
     id: Optional[int]
@@ -226,8 +228,3 @@ class CustomPlayerUpdate(PlayerBase):
 
 class CustomPlayerGet(CustomPlayerCreate):
     overall: int
-
-
-class PlayerPosSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    position: str
