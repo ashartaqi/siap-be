@@ -1,10 +1,10 @@
-from sentry_sdk.session import Session
 from app.core.db import SessionLocal
-from app.models import Player, Goalkeeper, Club , PlayerPos
+from app.models import Player, Club , PlayerPos
 
 
 
-def populate_positions(db: Session):
+def populate_positions():
+    db = SessionLocal()
     batch_size = 500
     offset = 0
 
@@ -29,3 +29,7 @@ def populate_positions(db: Session):
         offset += batch_size
 
     print("Done")
+
+#if __name__ == "__main__":
+    #run the script - python3 -m app.scripts.db_populate.Pop_Positions
+    #populate_positions()
