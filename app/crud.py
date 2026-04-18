@@ -108,11 +108,7 @@ def get_players(
     if nationality_name:
         query = query.filter(Player.nationality_name.ilike(nationality_name))
     if position:
-        if position.strip().upper() == "GK":
-            query = query.filter(Player.goalkeeper_stats.has())
-        else:
-            query = query.filter(Player.player_stats.has())
-        query = query.filter(Player.player_positions.ilike(f"%{position}%"))
+        query = query.join(Player.positions).filter(PlayerPos.position == position.strip().upper())
     if min_overall:
         query = query.filter(Player.overall >= min_overall)
     if max_overall:
@@ -269,30 +265,3 @@ def delete_custom_player(db: Session, user_id: int):
         db.commit()
         return True
     return False
-
-
-def populate_positions(db: Session):
-    batch_size = 500
-    offset = 0
-
-    while True:
-        players = db.query(Player).filter(
-            Player.player_positions != None
-        ).offset(offset).limit(batch_size).all()
-
-        if not players:
-            break
-
-        for player in players:
-            if not player.player_positions or not player.player_positions.strip():
-                continue
-            positions = [p.strip() for p in player.player_positions.split(",")]
-            for pos in positions:
-                if pos:
-                    db.merge(PlayerPos(player_id=player.id, position=pos))
-
-        db.commit()
-        print(f"Processed {offset + len(players)} players...")
-        offset += batch_size
-
-    print("Done")
