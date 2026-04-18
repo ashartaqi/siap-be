@@ -3,7 +3,7 @@ from sqlalchemy import text, desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer , PlayerPos
 
 
 # USERS
@@ -269,3 +269,30 @@ def delete_custom_player(db: Session, user_id: int):
         db.commit()
         return True
     return False
+
+
+def populate_positions(db: Session):
+    batch_size = 500
+    offset = 0
+
+    while True:
+        players = db.query(Player).filter(
+            Player.player_positions != None
+        ).offset(offset).limit(batch_size).all()
+
+        if not players:
+            break
+
+        for player in players:
+            if not player.player_positions or not player.player_positions.strip():
+                continue
+            positions = [p.strip() for p in player.player_positions.split(",")]
+            for pos in positions:
+                if pos:
+                    db.merge(PlayerPos(player_id=player.id, position=pos))
+
+        db.commit()
+        print(f"Processed {offset + len(players)} players...")
+        offset += batch_size
+
+    print("Done")

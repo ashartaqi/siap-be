@@ -58,7 +58,7 @@ class Player(Base):
 
     player_stats = relationship("PlayerStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
     goalkeeper_stats = relationship("GoalkeeperStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
-    positions = relationship("positions", back_populates="player", cascade="all, delete-orphan")
+    positions = relationship("PlayerPos", back_populates="player", cascade="all, delete-orphan")
 
 
 # class PlayerPos(Base):
@@ -72,17 +72,10 @@ class Player(Base):
 
 class PlayerPos(Base):
     __tablename__ = "positions"
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), primary_key=True)
+    position = Column(String(20), primary_key=True)
 
-    player_id = Column(
-        Integer,
-        ForeignKey("players.id", ondelete="CASCADE"),
-        primary_key=True
-    )
-
-    position = Column(
-        String(20),
-        primary_key=True
-    )
+    player = relationship("Player", back_populates="positions")
 
 
 class PlayerStats(Base):
