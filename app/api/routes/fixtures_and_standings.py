@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
 from app.schemas import Fixtures, LeagueStandings
+from app.api.constants import LEAGUE_CODES, VALID_MATCH_STATUSES
 
 
 router = APIRouter()
+
 
 @router.get("/fixtures", response_model=list[Fixtures])
 def get_fixtures(
@@ -38,3 +40,13 @@ def get_standings(
         return standings
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/league-codes")
+def get_league_codes():
+    return LEAGUE_CODES
+
+
+@router.get("/match-statuses")
+def get_match_statuses():
+    return VALID_MATCH_STATUSES

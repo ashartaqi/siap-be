@@ -3,7 +3,7 @@ from sqlalchemy import text, desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot,PlayerPos
 
 
 # USERS
@@ -108,11 +108,7 @@ def get_players(
     if nationality_name:
         query = query.filter(Player.nationality_name.ilike(nationality_name))
     if position:
-        if position.strip().upper() == "GK":
-            query = query.filter(Player.goalkeeper_stats.has())
-        else:
-            query = query.filter(Player.player_stats.has())
-        query = query.filter(Player.player_positions.ilike(f"%{position}%"))
+        query = query.join(Player.positions).filter(PlayerPos.position == position.strip().upper())
     if min_overall:
         query = query.filter(Player.overall >= min_overall)
     if max_overall:

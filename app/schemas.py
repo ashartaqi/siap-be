@@ -5,6 +5,7 @@ Used for request bodies and response models in API routes.
 from typing import Optional, ClassVar, Set,List,Literal
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
+from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX
 
 
 class UserLogin(BaseModel):
@@ -47,15 +48,13 @@ class RegisteredUser(BaseModel):
 class Token(BaseModel):
     token: str
     token_type: str
-    
-
 
 class Players(BaseModel):
     id: Optional[int]
 
     short_name: str
     long_name: str
-    player_positions: str
+    positions: List[str] = []
 
     overall: int
     age: int
@@ -84,8 +83,16 @@ class Players(BaseModel):
 
     player_face_url: Optional[str] = None
 
+
     class Config:
         from_attributes = True
+
+    @field_validator("positions", mode="before")
+    @classmethod
+    def flatten_positions(cls, v):
+        if v and hasattr(v[0], "position"):
+            return [p.position for p in v]
+        return v
 
 class Votes(BaseModel):
     id: int
@@ -131,12 +138,8 @@ class LeagueStandings(BaseModel):
 
 
 class PlayerBase(BaseModel):
-    VALID_POSITIONS: ClassVar[Set[str]] = {
-        "LW", "ST", "RW", "CM", "CAM", "LM", "RM", "CF",
-        "LWB", "RWB", "LB", "RB", "CB", "CDM", "GK"
-    }
-
-    VALID_FEET: ClassVar[Set[str]] = {"Left", "Right"}
+    VALID_POSITIONS: ClassVar[Set[str]] = {pos for group in VALID_PLAYER_POSITIONS.values() for pos in group}
+    VALID_FEET: ClassVar[Set[str]] = set(VALID_PREFERRED_FEET)
 
     @field_validator("name" ,check_fields=False)
     @classmethod
@@ -175,7 +178,7 @@ class PlayerBase(BaseModel):
     def stat_range(cls, v):
         if v is None:
             return v
-        if not (1 <= v <= 99):
+        if not (PLAYER_STAT_MIN <= v <= PLAYER_STAT_MAX):
             raise ValueError("Each stat must be between 1 and 99")
         return v
 
@@ -193,8 +196,8 @@ class PlayerBase(BaseModel):
         # Only validate if all stats are present (important for UPDATE)
         if all(v is not None for v in stats):
             total = sum(stats)
-            if total > 570:
-                raise ValueError(f"Total cannot exceed 570. You used {total}.")
+            if total > PLAYER_TOTAL_STATS_MAX:
+                raise ValueError(f"Total cannot exceed {PLAYER_TOTAL_STATS_MAX}. You used {total}.")
         return self
 
 
