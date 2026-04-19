@@ -21,8 +21,9 @@ async def update_fixtures():
         match_id = match.get("id")
         status = match.get("status")
         if status == "FINISHED":
-            away_score = match.get("score", {}).get("away")
-            home_score = match.get("score", {}).get("home")
+            full_time = match.get("score", {}).get("fullTime", {})
+            away_score = full_time.get("away")
+            home_score = full_time.get("home")
             winner = match.get("score", {}).get("winner")
             try:
                 db.query(Fixtures).filter(Fixtures.id == match_id).update({
@@ -53,7 +54,7 @@ async def fetch_fixtures():
     if not start_date or start_date < today_date:
         start_date = today_date
 
-    league_codes = ["PL", "PD", "BL1", "SA", "FL1", "CL", "WC", "PPL"]
+    league_codes = ["PL", "PD", "BL1", "SA", "FL1", "CL", "PPL"]
 
     for code in league_codes:
         matches = client.get_competition_matches(code, {
@@ -91,13 +92,10 @@ async def fetch_fixtures():
                 ))
                 db.commit()
             except IntegrityError:
-                db.rollback()
                 cur_match = db.query(Fixtures).filter(Fixtures.id == match_id).first()
                 if cur_match is None:
                     continue
-                if cur_match.status == "FINISHED":
-                    db.rollback()
-                elif cur_match.status != status:
+                if cur_match.status == "FINISHED" or cur_match.status != status:
                     cur_match.status = status
                     cur_match.away_team_score = away_score
                     cur_match.home_team_score = home_score
@@ -165,8 +163,8 @@ async def fetch_leagues():
 # To run the script:
 # python3 -m app.scripts.jobs
 
-#if __name__ == "__main__":
-    #import asyncio
+# if __name__ == "__main__":
+    # import asyncio
     #asyncio.run(fetch_fixtures())
     #asyncio.run(fetch_leagues())
-    #asyncio.run(update_fixtures())
+    # asyncio.run(update_fixtures())
