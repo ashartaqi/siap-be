@@ -3,6 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from app.api.client.football_data import FootballDataClient
 from app.models import Fixtures, LeagueStandings
+from app.api.constants import LEAGUE_CODES
 from datetime import timedelta, datetime
 
 
@@ -54,9 +55,7 @@ async def fetch_fixtures():
     if not start_date or start_date < today_date:
         start_date = today_date
 
-    league_codes = ["PL", "PD", "BL1", "SA", "FL1", "CL", "PPL"]
-
-    for code in league_codes:
+    for code in LEAGUE_CODES:
         matches = client.get_competition_matches(code, {
             "dateFrom": str(start_date),
             "dateTo": str(next_date),
@@ -92,6 +91,7 @@ async def fetch_fixtures():
                 ))
                 db.commit()
             except IntegrityError:
+                db.rollback()
                 cur_match = db.query(Fixtures).filter(Fixtures.id == match_id).first()
                 if cur_match is None:
                     continue
@@ -114,9 +114,7 @@ async def fetch_leagues():
     if datetime.now().month <= 8:
         current_year -= 1
 
-    league_codes = ["PL", "PD", "BL1", "SA", "FL1", "PPL"]
-
-    for code in league_codes:
+    for code in (c for c in LEAGUE_CODES if c != "CL"):
         db.query(LeagueStandings).filter(
             LeagueStandings.league == code,
         ).delete()
@@ -164,7 +162,7 @@ async def fetch_leagues():
 # python3 -m app.scripts.jobs
 
 # if __name__ == "__main__":
-    # import asyncio
-    #asyncio.run(fetch_fixtures())
-    #asyncio.run(fetch_leagues())
+#     import asyncio
+    # asyncio.run(fetch_fixtures())
+    # asyncio.run(fetch_leagues())
     # asyncio.run(update_fixtures())
