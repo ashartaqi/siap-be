@@ -46,17 +46,14 @@ class RegisteredUser(BaseModel):
 class Token(BaseModel):
     token: str
     token_type: str
-    
-class PlayerPosSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    position: str
+
 
 class Players(BaseModel):
     id: Optional[int]
 
     short_name: str
     long_name: str
-    positions: List[PlayerPosSchema] = []
+    positions: List[str] = []
 
     overall: int
     age: int
@@ -85,8 +82,16 @@ class Players(BaseModel):
 
     player_face_url: Optional[str] = None
 
+
     class Config:
         from_attributes = True
+
+    @field_validator("positions", mode="before")
+    @classmethod
+    def flatten_positions(cls, v):
+        if v and hasattr(v[0], "position"):
+            return [p.position for p in v]
+        return v
 
 class Votes(BaseModel):
     id: int

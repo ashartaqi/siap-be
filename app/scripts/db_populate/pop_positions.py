@@ -1,6 +1,5 @@
 from app.core.db import SessionLocal
-from app.models import Player, Club , PlayerPos
-
+from app.models import Player, PlayerPos
 
 
 def populate_positions():
@@ -30,6 +29,6 @@ def populate_positions():
 
     print("Done")
 
-#if __name__ == "__main__":
-    #run the script - python3 -m app.scripts.db_populate.Pop_Positions
-    #populate_positions()
+# if __name__ == "__main__":
+    # run the script - python3 -m app.scripts.db_populate.Pop_Positions
+    # populate_positions()
