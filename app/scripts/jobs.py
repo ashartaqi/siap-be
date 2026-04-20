@@ -136,6 +136,7 @@ async def fetch_leagues():
             goals_for = team.get("goalsFor")
             goals_against = team.get("goalsAgainst")
             goal_difference = team.get("goalDifference")
+            logo = team.get("team", {}).get("crest")
 
             try:
                 db.add(LeagueStandings(
@@ -149,7 +150,8 @@ async def fetch_leagues():
                     goals_for=goals_for,
                     goals_against=goals_against,
                     goal_difference=goal_difference,
-                    league=code
+                    league=code,
+                    logo_url=logo
                 ))
                 db.commit()
             except IntegrityError:

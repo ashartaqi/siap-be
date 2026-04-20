@@ -163,6 +163,7 @@ class LeagueStandings(Base):
     goals_against = Column(Integer, nullable=False)
     goal_difference = Column(Integer, nullable=False)
     league = Column(String, nullable=False)
+    logo_url = Column(String, nullable=True)
 
 
 class CustomPlayer(Base):
