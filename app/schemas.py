@@ -133,10 +133,17 @@ class LeagueStandings(BaseModel):
     goal_difference: int
     league: str
     logo_url: Optional[str] = None
-    form: Optional[str] = None
+    forms: List[str] = []
 
     class Config:
         from_attributes = True
+
+    @field_validator("forms", mode="before")
+    @classmethod
+    def flatten_forms(cls, v):
+        if v and hasattr(v[0], "outcome"):
+            return [f.outcome for f in v]
+        return v
 
 
 class PlayerBase(BaseModel):

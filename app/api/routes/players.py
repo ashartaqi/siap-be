@@ -5,8 +5,7 @@ from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
 from app.schemas import Players
-from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET
-
+from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STATS
 
 router = APIRouter()
 
@@ -63,3 +62,8 @@ def get_player_positions():
 @router.get("/preferred-feet")
 def get_preferred_feet():
     return VALID_PREFERRED_FEET
+
+
+@router.get("/stats-limits")
+def get_total_stats():
+    return PLAYER_STATS
