@@ -245,15 +245,19 @@ class FormationBase(BaseModel):
     formation: Literal["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"]
 
 class DreamTeamSlotCreate(BaseModel):
-    slot_label: str
+    position: str
     player_id: int
+    row: Optional[int] = None
+    col: Optional[int] = None
     
 class DreamTeamCreate(FormationBase):
     slots: List[DreamTeamSlotCreate]
 
 class DreamTeamSlotGet(BaseModel):
     id: int
-    slot_label: str
+    position: str        
+    row: Optional[int] = None   
+    col: Optional[int] = None   
     player_id: int
 
     class Config:
@@ -263,6 +267,7 @@ class DreamTeamGet(BaseModel):
     id: int
     formation: str
     slots: List[DreamTeamSlotGet]
+    total_score: int
 
     class Config:
         from_attributes = True

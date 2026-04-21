@@ -1,7 +1,6 @@
 import app
 from fastapi import APIRouter
-from app.api.routes import players, teams, user, fixtures_and_standings, votes, custom_player,dream_team
-from app.api.routes import players, teams, user, fixtures_and_standings, votes, custom_player
+from app.api.routes import players, teams, user, fixtures_and_standings, votes, custom_player, dream_team
 
 api_router = APIRouter()
 api_router.include_router(user.router, prefix="/user", tags=["user"])

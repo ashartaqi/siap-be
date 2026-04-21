@@ -4,8 +4,7 @@ from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer , PlayerPos
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot,PlayerPos
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 
 
 # USERS
@@ -280,7 +279,7 @@ def delete_custom_player(db: Session, user_id: int):
 def get_dream_team(db: Session, user_id: int):
     return db.query(DreamTeam)\
              .filter(DreamTeam.user_id == user_id)\
-             .all()
+             .first()
 
 def delete_dream_team(db: Session, user_id: int):
     team = db.query(DreamTeam).filter(
@@ -293,22 +292,34 @@ def delete_dream_team(db: Session, user_id: int):
     return False
 
 def create_dream_team(db: Session, user_id: int, formation: str, slots: list):
-    team=DreamTeam(user_id = user_id,formation=formation)
-    create(db,team)
 
     if len(slots) != 11:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 11 slots must be provided")
 
+    total_score = 0
+    for slot in slots:
+        player = db.query(Player).filter(Player.id == slot.player_id).first()
+        if not player:
+            raise HTTPException(status_code=404, detail=f"Player {slot.player_id} not found")
+        total_score += player.overall
+    
+    
+    team=DreamTeam(user_id = user_id,formation=formation,total_score =(total_score)//11)
+    create(db,team)
+
+     
 
     
     for slot in slots:
         player = db.query(Player).filter(Player.id == slot.player_id).first()
         if not player:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player with id {slot.player_id} ___")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player with id {slot.player_id} not found")
         
         slot_row = DreamTeamSlot(
             dream_team_id=team.id,
-            slot_label=slot.slot_label,
+            position=slot.position,
+            row=slot.row,
+            col=slot.col,
             player_id=slot.player_id
         )
         create(db, slot_row)
@@ -316,4 +327,39 @@ def create_dream_team(db: Session, user_id: int, formation: str, slots: list):
     return team
 
 
-    
+def update_dream_team(db: Session, user_id: int, formation: str, slots: list):
+    team = db.query(DreamTeam).filter(DreamTeam.user_id == user_id).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No dream team found")
+
+    if len(slots) != 11:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 11 slots must be provided")
+
+    total_score = 0
+    for slot in slots:
+        player = db.query(Player).filter(Player.id == slot.player_id).first()
+        if not player:
+            raise HTTPException(status_code=404, detail=f"Player {slot.player_id} not found")
+        total_score += player.overall
+
+    # Update team fields
+    team.formation = formation
+    team.total_score = total_score // 11
+
+    # Delete old slots and create new ones
+    db.query(DreamTeamSlot).filter(DreamTeamSlot.dream_team_id == team.id).delete()
+    db.flush()
+
+    for slot in slots:
+        slot_row = DreamTeamSlot(
+            dream_team_id=team.id,
+            position=slot.position,
+            row=slot.row,
+            col=slot.col,
+            player_id=slot.player_id
+        )
+        db.add(slot_row)
+
+    db.commit()
+    db.refresh(team)
+    return team

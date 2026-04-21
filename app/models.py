@@ -204,6 +204,7 @@ class DreamTeam(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     formation = Column(String(20),nullable=False)
+    total_score = Column(Integer, nullable=False)
     slots = relationship("DreamTeamSlot", uselist=True, cascade="all, delete-orphan")
 
 
@@ -212,7 +213,9 @@ class DreamTeamSlot(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     dream_team_id = Column(Integer, ForeignKey("dream_team.id", ondelete="CASCADE"), nullable=False)
-    slot_label = Column(String(10),nullable=False)
+    position = Column(String(10),nullable=False)
+    col = Column(Integer,nullable=True)
+    row = Column(Integer,nullable=True)
     player_id =Column(Integer,ForeignKey("players.id",ondelete = "CASCADE"), nullable = False)
    
 
