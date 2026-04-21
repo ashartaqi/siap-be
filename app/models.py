@@ -165,6 +165,20 @@ class LeagueStandings(Base):
     league = Column(String, nullable=False)
     logo_url = Column(String, nullable=True)
 
+    forms = relationship("Form", backref="league_standing", cascade="all, delete")
+
+
+class Form(Base):
+    __tablename__ = "form"
+
+    id = Column(Integer, primary_key=True)
+    league_standing_id = Column(
+        Integer,
+        ForeignKey("league_standings.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    outcome = Column(String, nullable=False)
+
 
 class CustomPlayer(Base):
     __tablename__ = "custom_players"
