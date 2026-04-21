@@ -137,6 +137,7 @@ async def fetch_leagues():
             goals_against = team.get("goalsAgainst")
             goal_difference = team.get("goalDifference")
             logo = team.get("team", {}).get("crest")
+            form = team.get("form")
 
             try:
                 db.add(LeagueStandings(
@@ -151,7 +152,8 @@ async def fetch_leagues():
                     goals_against=goals_against,
                     goal_difference=goal_difference,
                     league=code,
-                    logo_url=logo
+                    logo_url=logo,
+                    form=form
                 ))
                 db.commit()
             except IntegrityError:
@@ -163,8 +165,8 @@ async def fetch_leagues():
 # To run the script:
 # python3 -m app.scripts.jobs
 
-# if __name__ == "__main__":
-#     import asyncio
-    # asyncio.run(fetch_fixtures())
-    # asyncio.run(fetch_leagues())
-    # asyncio.run(update_fixtures())
+if __name__ == "__main__":
+    import asyncio
+    #asyncio.run(fetch_fixtures())
+    asyncio.run(fetch_leagues())
+    #asyncio.run(update_fixtures())

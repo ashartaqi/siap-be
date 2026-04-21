@@ -133,6 +133,7 @@ class LeagueStandings(BaseModel):
     goal_difference: int
     league: str
     logo_url: Optional[str] = None
+    form: Optional[str] = None
 
     class Config:
         from_attributes = True

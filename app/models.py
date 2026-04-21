@@ -164,6 +164,7 @@ class LeagueStandings(Base):
     goal_difference = Column(Integer, nullable=False)
     league = Column(String, nullable=False)
     logo_url = Column(String, nullable=True)
+    form = Column(String, nullable=True)
 
 
 class CustomPlayer(Base):
