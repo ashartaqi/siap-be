@@ -2,8 +2,8 @@ from app.core.db import SessionLocal
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from app.api.client.football_data import FootballDataClient
-from app.models import Fixtures, LeagueStandings
-from app.api.constants import LEAGUE_CODES
+from app.models import Fixtures, LeagueStandings, Form
+from app.api.constants import FIXTURE_LEAGUES
 from datetime import timedelta, datetime
 
 
@@ -55,7 +55,8 @@ async def fetch_fixtures():
     if not start_date or start_date < today_date:
         start_date = today_date
 
-    for code in LEAGUE_CODES:
+    league_codes = [code["key"] for code in FIXTURE_LEAGUES]
+    for code in league_codes:
         matches = client.get_competition_matches(code, {
             "dateFrom": str(start_date),
             "dateTo": str(next_date),
@@ -114,7 +115,8 @@ async def fetch_leagues():
     if datetime.now().month <= 8:
         current_year -= 1
 
-    for code in (c for c in LEAGUE_CODES if c != "CL"):
+    league_codes = [code["key"] for code in FIXTURE_LEAGUES]
+    for code in (c for c in league_codes if c != "CL"):
         db.query(LeagueStandings).filter(
             LeagueStandings.league == code,
         ).delete()
@@ -137,10 +139,10 @@ async def fetch_leagues():
             goals_against = team.get("goalsAgainst")
             goal_difference = team.get("goalDifference")
             logo = team.get("team", {}).get("crest")
-            form = team.get("form")
+            forms = (team.get("form")).split(",")
 
             try:
-                db.add(LeagueStandings(
+                league = LeagueStandings(
                     position=position,
                     team_name=team_name,
                     points=points,
@@ -153,9 +155,15 @@ async def fetch_leagues():
                     goal_difference=goal_difference,
                     league=code,
                     logo_url=logo,
-                    form=form
-                ))
+                )
+                db.add(league)
                 db.commit()
+                for form in forms:
+                    db.add(Form(
+                        outcome=form,
+                        league_standing_id=league.id
+                    ))
+                    db.commit()
             except IntegrityError:
                 db.rollback()
             except Exception as e:
@@ -165,8 +173,8 @@ async def fetch_leagues():
 # To run the script:
 # python3 -m app.scripts.jobs
 
-if __name__ == "__main__":
-    import asyncio
-    #asyncio.run(fetch_fixtures())
-    asyncio.run(fetch_leagues())
-    #asyncio.run(update_fixtures())
+# if __name__ == "__main__":
+#     import asyncio
+    # asyncio.run(fetch_fixtures())
+    # asyncio.run(fetch_leagues())
+    # asyncio.run(update_fixtures())
