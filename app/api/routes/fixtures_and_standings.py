@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
 from app.schemas import Fixtures, LeagueStandings
-from app.api.constants import LEAGUE_CODES, VALID_MATCH_STATUSES
+from app.api.constants import LEAGUE_CODES, VALID_MATCH_STATUSES, FIXTURE_LEAGUES, STANDING_LEAGUES, CURRENT_SEASON
 
 
 router = APIRouter()
@@ -50,3 +50,15 @@ def get_league_codes():
 @router.get("/match-statuses")
 def get_match_statuses():
     return VALID_MATCH_STATUSES
+
+@router.get("/fixture-leagues")
+def get_fixture_leages():
+    return FIXTURE_LEAGUES
+
+@router.get("/standing-leagues")
+def get_standing_leagues():
+    return STANDING_LEAGUES
+
+@router.get("/current-season")
+def get_current_season():
+    return CURRENT_SEASON
