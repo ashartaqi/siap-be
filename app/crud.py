@@ -1,8 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import text, desc
+from sqlalchemy import desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import contains_eager
 from fastapi import HTTPException, status
+from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer , PlayerPos
 from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot,PlayerPos
 
 
@@ -173,15 +175,23 @@ def get_standings(
     league: str = None,
     team_name: str = None
 ):
-    query = db.query(LeagueStandings)
-    
-    if league:
-        query = query.filter(LeagueStandings.league == league)
-    if team_name:
-        query = query.filter(LeagueStandings.team_name.ilike(f"%{team_name}%"))
-    
-    return query.order_by(LeagueStandings.position).limit(limit).all()
+    subq = db.query(LeagueStandings.id)
 
+    if league:
+        subq = subq.filter(LeagueStandings.league == league)
+    if team_name:
+        subq = subq.filter(LeagueStandings.team_name.ilike(f"%{team_name}%"))
+
+    subq = subq.order_by(LeagueStandings.position).limit(limit).subquery()
+
+    return (
+        db.query(LeagueStandings)
+        .join(subq, LeagueStandings.id == subq.c.id)
+        .outerjoin(LeagueStandings.forms)
+        .options(contains_eager(LeagueStandings.forms))
+        .order_by(LeagueStandings.position, desc(Form.id))
+        .all()
+    )
 
 def get_votes(
     db: Session,
