@@ -8,7 +8,7 @@ from app.core.security import get_current_user
 
 router = APIRouter()
 
-@router.get("/")
+@router.get("")
 def get_teams(
     db: Session = Depends(get_db),
     skip: int = 0,
