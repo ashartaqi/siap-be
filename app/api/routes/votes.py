@@ -28,7 +28,7 @@ def get_votes(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/")
+@router.post("")
 def create_vote(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -42,7 +42,7 @@ def create_vote(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add fixture_id missing or invalid")
 
 
-@router.get("/")
+@router.get("")
 def get_user_votes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -50,7 +50,7 @@ def get_user_votes(
     return crud.get_user_votes(db, current_user.id)
 
 
-@router.delete("/")
+@router.delete("")
 def delete_vote(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

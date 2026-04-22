@@ -8,7 +8,7 @@ from app.schemas import CustomPlayerCreate, CustomPlayerUpdate, CustomPlayerGet
 
 router = APIRouter()
 
-@router.post("/", response_model=CustomPlayerCreate, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CustomPlayerCreate, status_code=status.HTTP_201_CREATED)
 def create_custom_player(payload: CustomPlayerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, current_user.id)
     if player:
@@ -22,7 +22,7 @@ def create_custom_player(payload: CustomPlayerCreate, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/", response_model=CustomPlayerGet)
+@router.get("", response_model=CustomPlayerGet)
 def get_dream_player(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, current_user.id)
     if not player:
@@ -30,7 +30,7 @@ def get_dream_player(db: Session = Depends(get_db), current_user: User = Depends
     return player
 
 
-@router.patch("/", response_model=CustomPlayerUpdate)
+@router.patch("", response_model=CustomPlayerUpdate)
 def update_dream_player(payload: CustomPlayerUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, current_user.id)
     if not player:
@@ -44,7 +44,7 @@ def update_dream_player(payload: CustomPlayerUpdate, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/")
+@router.delete("")
 def delete_dream_player(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = crud.delete_custom_player(db, current_user.id)
     if result:
