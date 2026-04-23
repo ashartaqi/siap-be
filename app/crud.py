@@ -157,7 +157,10 @@ def get_fixtures(
     if league:
         query = query.filter(Fixtures.league == league)
     if status_filter:
-        query = query.filter(Fixtures.status == status_filter)
+        if (status_filter == 'FINISHED'):
+            query = query.filter(Fixtures.status == status_filter).order_by(Fixtures.date.desc())
+        else:
+            query = query.filter(Fixtures.status == status_filter)
     if home_team:
         query = query.filter(Fixtures.home_team.ilike(f"%{home_team}%"))
     if away_team:
