@@ -170,11 +170,10 @@ async def fetch_leagues():
                 print(e)
                 db.rollback()
 
+
 # To run the script:
 # python3 -m app.scripts.jobs
-
 # if __name__ == "__main__":
-#     import asyncio
     # asyncio.run(fetch_fixtures())
     # asyncio.run(fetch_leagues())
     # asyncio.run(update_fixtures())

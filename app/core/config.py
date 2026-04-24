@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB_NAME: str
 
+    ALLOWED_HOSTS: str
     SECRET_KEY: str
     ALGORITHM :str
     ACCESS_TOKEN_EXPIRE_MINUTES :int

@@ -10,7 +10,7 @@ from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAY
 router = APIRouter()
 
 
-@router.get("/", response_model=list[Players])
+@router.get("", response_model=list[Players])
 def get_players(
     db: Session = Depends(get_db),
     limit: int = 11,
