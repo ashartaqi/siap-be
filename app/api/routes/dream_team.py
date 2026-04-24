@@ -9,7 +9,7 @@ from app.schemas import DreamTeamCreate, DreamTeamGet, DreamTeamSlotUpdate
 router = APIRouter()
 
 
-@router.post("/", response_model=DreamTeamGet, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DreamTeamGet, status_code=status.HTTP_201_CREATED)
 def create_dream_team(payload: DreamTeamCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     team = crud.get_dream_team(db, current_user.id)
     if team:
@@ -21,7 +21,7 @@ def create_dream_team(payload: DreamTeamCreate, db: Session = Depends(get_db), c
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/", response_model=DreamTeamGet)
+@router.get("", response_model=DreamTeamGet)
 def get_dream_team(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     team = crud.get_dream_team(db, current_user.id)
     if not team:
@@ -29,7 +29,7 @@ def get_dream_team(db: Session = Depends(get_db), current_user: User = Depends(g
     return team
 
 
-@router.put("/", response_model=DreamTeamGet)
+@router.put("" ,response_model=DreamTeamGet)
 def update_dream_team(payload: DreamTeamCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     team = crud.get_dream_team(db, current_user.id)
     if not team:
@@ -52,7 +52,7 @@ def update_dream_team_slot(slot_id: int, payload: DreamTeamSlotUpdate, db: Sessi
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/")
+@router.delete("")
 def delete_dream_team(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = crud.delete_dream_team(db, current_user.id)
     if result:
