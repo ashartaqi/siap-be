@@ -2,10 +2,11 @@
 Pydantic schemas for data validation and serialization.
 Used for request bodies and response models in API routes.
 """
-from typing import Optional, ClassVar, Set , List
+from typing import Optional, ClassVar, Set,List,Literal
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
 from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX
+
 
 class UserLogin(BaseModel):
     email: str
@@ -47,7 +48,6 @@ class RegisteredUser(BaseModel):
 class Token(BaseModel):
     token: str
     token_type: str
-
 
 class Players(BaseModel):
     id: Optional[int]
@@ -239,3 +239,43 @@ class CustomPlayerUpdate(PlayerBase):
 
 class CustomPlayerGet(CustomPlayerCreate):
     overall: int
+
+
+class FormationBase(BaseModel):
+    formation: Literal["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"]
+
+class DreamTeamSlotCreate(BaseModel):
+    position: str
+    player_id: int
+    row: Optional[int] = None
+    col: Optional[int] = None
+    
+class DreamTeamCreate(FormationBase):
+    slots: List[DreamTeamSlotCreate]
+
+class DreamTeamSlotGet(BaseModel):
+    id: int
+    position: str        
+    row: Optional[int] = None   
+    col: Optional[int] = None   
+    player_id: int
+    player: Optional[Players] = None
+
+    class Config:
+        from_attributes = True
+
+class DreamTeamSlotUpdate(BaseModel):
+    player_id: int
+
+class DreamTeamGet(BaseModel):
+    id: int
+    formation: str
+    slots: List[DreamTeamSlotGet]
+    total_score: int
+
+    class Config:
+        from_attributes = True
+
+
+
+    
