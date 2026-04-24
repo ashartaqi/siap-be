@@ -217,5 +217,5 @@ class DreamTeamSlot(Base):
     col = Column(Integer,nullable=True)
     row = Column(Integer,nullable=True)
     player_id =Column(Integer,ForeignKey("players.id",ondelete = "CASCADE"), nullable = False)
-   
+    player = relationship("Player", lazy="joined") 
 

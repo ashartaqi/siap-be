@@ -4,7 +4,7 @@ from app import crud
 from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
-from app.schemas import DreamTeamCreate, DreamTeamGet
+from app.schemas import DreamTeamCreate, DreamTeamGet, DreamTeamSlotUpdate
 
 router = APIRouter()
 
@@ -37,6 +37,17 @@ def update_dream_team(payload: DreamTeamCreate, db: Session = Depends(get_db), c
     try:
         team = crud.update_dream_team(db, user_id=current_user.id, formation=payload.formation, slots=payload.slots)
         return team
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/slot/{slot_id}", response_model=DreamTeamGet)
+def update_dream_team_slot(slot_id: int, payload: DreamTeamSlotUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        team = crud.update_dream_team_slot(db, user_id=current_user.id, slot_id=slot_id, player_id=payload.player_id)
+        return team
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

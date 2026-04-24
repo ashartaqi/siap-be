@@ -40,13 +40,6 @@ PLAYER_STATS = {
 # Formations
 FORMATIONS = [
     {
-        "id": "4-4-2",
-        "label": "4-4-2",
-        "description": "Classic Balance",
-        "tacticalFit": "A+",
-        "rows": [["ST", "ST"], ["LM", "CM", "CM", "RM"], ["LB", "CB", "CB", "RB"]],
-    },
-    {
         "id": "4-3-3",
         "label": "4-3-3",
         "description": "Offensive Width",
@@ -54,17 +47,38 @@ FORMATIONS = [
         "rows": [["LW", "ST", "RW"], ["CM", "CM", "CM"], ["LB", "CB", "CB", "RB"]],
     },
     {
+        "id": "4-4-2",
+        "label": "4-4-2",
+        "description": "Classic Balance",
+        "tacticalFit": "A+",
+        "rows": [["ST", "ST"], ["LM", "CM", "CM", "RM"], ["LB", "CB", "CB", "RB"]],
+    },
+    {
+        "id": "4-2-3-1",
+        "label": "4-2-3-1",
+        "description": "Tactical Pivot",
+        "tacticalFit": "A-",
+        "rows": [["ST"], ["LM", "CAM", "RM"], ["CDM", "CDM"], ["LB", "CB", "CB", "RB"]],
+    },
+    {
+        "id": "3-5-2",
+        "label": "3-5-2",
+        "description": "Wingback Width",
+        "tacticalFit": "B",
+        "rows": [["ST", "ST"], ["LM", "CM", "CDM", "CM", "RM"], ["CB", "CB", "CB"]],
+    },
+    {
+        "id": "5-3-2",
+        "label": "5-3-2",
+        "description": "Haram Ball",
+        "tacticalFit": "A-",
+        "rows": [["ST", "ST"], ["CM", "CM", "CM"], ["LWB", "CB", "CB", "CB", "RWB"]],
+    },
+    {
         "id": "3-4-3",
         "label": "3-4-3",
         "description": "Midfield Control",
         "tacticalFit": "B+",
         "rows": [["LW", "ST", "RW"], ["LM", "CM", "CM", "RM"], ["CB", "CB", "CB"]],
-    },
-    {
-        "id": "4-2-2-2",
-        "label": "4-2-2-2",
-        "description": "Tactical Pivot",
-        "tacticalFit": "A-",
-        "rows": [["ST", "ST"], ["AM", "AM"], ["DM", "DM"], ["LB", "CB", "CB", "RB"]],
     },
 ]

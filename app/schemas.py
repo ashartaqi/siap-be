@@ -259,9 +259,13 @@ class DreamTeamSlotGet(BaseModel):
     row: Optional[int] = None   
     col: Optional[int] = None   
     player_id: int
+    player: Optional[Players] = None
 
     class Config:
         from_attributes = True
+
+class DreamTeamSlotUpdate(BaseModel):
+    player_id: int
 
 class DreamTeamGet(BaseModel):
     id: int
@@ -271,3 +275,7 @@ class DreamTeamGet(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+
+    
