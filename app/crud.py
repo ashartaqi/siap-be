@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import contains_eager
+from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, Club, Player, PlayerStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 
 
 # USERS
@@ -120,6 +120,8 @@ def get_players(
         query = query.filter(Player.age <= max_age)
     if preferred_foot:
         query = query.filter(Player.preferred_foot.ilike(preferred_foot))
+
+    query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
 
     return query.order_by(desc(Player.overall)).limit(limit).all()
 
