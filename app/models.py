@@ -38,7 +38,6 @@ class Player(Base):
     short_name = Column(String, index=True)
     long_name = Column(String, index=True)
     overall = Column(Integer, index=True)
-    age = Column(Integer, index=True)
     dob = Column(DateTime, index=True)
     height_cm = Column(Integer, index=True)
     weight_kg = Column(Integer, index=True)
@@ -197,3 +196,25 @@ class CustomPlayer(Base):
     defending = Column(Integer, nullable=False)
     physic = Column(Integer, nullable=False)
     overall = Column(Integer, nullable=False)
+
+class DreamTeam(Base):
+    __tablename__ = "dream_team"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    formation = Column(String(20),nullable=False)
+    total_score = Column(Integer, nullable=False)
+    slots = relationship("DreamTeamSlot", uselist=True, cascade="all, delete-orphan")
+
+
+class DreamTeamSlot(Base):
+    __tablename__ = "dream_team_slot"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dream_team_id = Column(Integer, ForeignKey("dream_team.id", ondelete="CASCADE"), nullable=False)
+    position = Column(String(10),nullable=False)
+    col = Column(Integer,nullable=True)
+    row = Column(Integer,nullable=True)
+    player_id =Column(Integer,ForeignKey("players.id",ondelete = "CASCADE"), nullable = False)
+    player = relationship("Player", lazy="joined") 
+

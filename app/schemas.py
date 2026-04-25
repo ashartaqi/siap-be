@@ -2,10 +2,11 @@
 Pydantic schemas for data validation and serialization.
 Used for request bodies and response models in API routes.
 """
-from typing import Optional, ClassVar, Set , List
+from typing import Optional, ClassVar, Set,List,Literal
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
 from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX
+
 
 class UserLogin(BaseModel):
     email: str
@@ -48,23 +49,43 @@ class Token(BaseModel):
     token: str
     token_type: str
 
+class PlayerStats(BaseModel):
+    pace: Optional[int]
+    shooting: Optional[int]
+    passing: Optional[int]
+    dribbling: Optional[int]
+    defending: Optional[int]
+    physic: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+class GoalkeeperStats(BaseModel):
+    diving: Optional[int]
+    handling: Optional[int]
+    kicking: Optional[int]
+    positioning: Optional[int]
+    reflexes: Optional[int]
+    speed: Optional[int]
+
+    class Config:
+        from_attributes = True
 
 class Players(BaseModel):
     id: Optional[int]
-
     short_name: str
     long_name: str
+
     positions: List[str] = []
 
     overall: int
-    age: int
     dob: Optional[datetime] = None
 
     height_cm: int
     weight_kg: int
 
-    club_team_id: int
-    club_name: str
+    club_team_id: Optional[int] = None
+    club_name: Optional[str] = None
 
     nationality_id: int
     nationality_name: str
@@ -74,15 +95,11 @@ class Players(BaseModel):
     skill_moves: int
     work_rate: Optional[str] = None
 
-    pace: Optional[int] = None
-    shooting: Optional[int] = None
-    passing: Optional[int] = None
-    dribbling: Optional[int] = None
-    defending: Optional[int] = None
-    physic: Optional[int] = None
+    player_stats: Optional[PlayerStats]
+
+    goalkeeper_stats: Optional[GoalkeeperStats]
 
     player_face_url: Optional[str] = None
-
 
     class Config:
         from_attributes = True
@@ -239,3 +256,43 @@ class CustomPlayerUpdate(PlayerBase):
 
 class CustomPlayerGet(CustomPlayerCreate):
     overall: int
+
+
+class FormationBase(BaseModel):
+    formation: Literal["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"]
+
+class DreamTeamSlotCreate(BaseModel):
+    position: str
+    player_id: int
+    row: Optional[int] = None
+    col: Optional[int] = None
+    
+class DreamTeamCreate(FormationBase):
+    slots: List[DreamTeamSlotCreate]
+
+class DreamTeamSlotGet(BaseModel):
+    id: int
+    position: str        
+    row: Optional[int] = None   
+    col: Optional[int] = None   
+    player_id: int
+    player: Optional[Players] = None
+
+    class Config:
+        from_attributes = True
+
+class DreamTeamSlotUpdate(BaseModel):
+    player_id: int
+
+class DreamTeamGet(BaseModel):
+    id: int
+    formation: str
+    slots: List[DreamTeamSlotGet]
+    total_score: int
+
+    class Config:
+        from_attributes = True
+
+
+
+    
