@@ -85,8 +85,8 @@ class Players(BaseModel):
     height_cm: int
     weight_kg: int
 
-    club_team_id: int
-    club_name: str
+    club_team_id: Optional[int] = None
+    club_name: Optional[str] = None
 
     nationality_id: int
     nationality_name: str

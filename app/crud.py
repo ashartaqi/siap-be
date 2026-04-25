@@ -95,7 +95,8 @@ def get_players(
     max_overall: int = None,
     min_age: int = None,
     max_age: int = None,
-    preferred_foot: str = None
+    preferred_foot: str = None,
+    skip: int = 0
 ):
     query = db.query(Player)
 
@@ -123,7 +124,7 @@ def get_players(
 
     query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
 
-    return query.order_by(desc(Player.overall)).limit(limit).all()
+    return query.order_by(desc(Player.overall)).offset(skip).limit(limit).all()
 
 
 def add_fav_player(db, user, player):
@@ -132,7 +133,17 @@ def add_fav_player(db, user, player):
 
 
 def get_fav_players(db, user):
-    return db.query(Player).join(FavouritePlayers, FavouritePlayers.player_id == Player.id).filter(FavouritePlayers.user_id == user).all()
+    return (
+        db.query(Player)
+        .join(FavouritePlayers, FavouritePlayers.player_id == Player.id)
+        .filter(FavouritePlayers.user_id == user)
+        .options(
+            joinedload(Player.player_stats),
+            joinedload(Player.positions),
+            joinedload(Player.goalkeeper_stats)
+        )
+        .all()
+    )
 
 
 def remove_fav_player(db, user, player):
