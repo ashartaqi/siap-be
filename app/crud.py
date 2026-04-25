@@ -64,7 +64,7 @@ def get_teams(
     if min_defence:
         query = query.filter(Club.defence >= min_defence)
 
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(desc(Club.overall)).offset(skip).limit(limit).all()
 
 
 def add_fav_team(db, user, team):
