@@ -79,7 +79,6 @@ class Players(BaseModel):
     positions: List[str] = []
 
     overall: int
-    age: int
     dob: Optional[datetime] = None
 
     height_cm: int

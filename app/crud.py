@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from datetime import date
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
@@ -116,9 +117,21 @@ def get_players(
     if max_overall:
         query = query.filter(Player.overall <= max_overall)
     if min_age:
-        query = query.filter(Player.age >= min_age)
+        today = date.today()
+        max_dob_year = today.year - min_age
+        try:
+            max_dob = today.replace(year=max_dob_year)
+        except ValueError:
+            max_dob = today.replace(year=max_dob_year, day=28)
+        query = query.filter(Player.dob <= max_dob)
     if max_age:
-        query = query.filter(Player.age <= max_age)
+        today = date.today()
+        min_dob_year = today.year - max_age - 1
+        try:
+            min_dob = today.replace(year=min_dob_year)
+        except ValueError:
+            min_dob = today.replace(year=min_dob_year, day=28)
+        query = query.filter(Player.dob > min_dob)
     if preferred_foot:
         query = query.filter(Player.preferred_foot.ilike(preferred_foot))
 
