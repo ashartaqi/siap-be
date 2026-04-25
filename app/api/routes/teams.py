@@ -20,9 +20,10 @@ def get_teams(
     max_overall: int = None,
     min_attack: int = None,
     min_midfield: int = None,
-    min_defence: int = None
+    min_defence: int = None,
+    team_type: str = "club"
 ):
-    return crud.get_teams(db, skip, limit, name, league_name, nationality_name, min_overall, max_overall, min_attack, min_midfield, min_defence)
+    return crud.get_teams(db, skip, limit, name, league_name, nationality_name, min_overall, max_overall, min_attack, min_midfield, min_defence, team_type)
 
 
 @router.post("/fav")

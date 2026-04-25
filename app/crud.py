@@ -43,9 +43,15 @@ def get_teams(
     max_overall: int = None, 
     min_attack: int = None, 
     min_midfield: int = None, 
-    min_defence: int = None):
+    min_defence: int = None,
+    team_type: str = "club"):
     
     query = db.query(Club)
+
+    if team_type == "national":
+        query = query.filter(Club.league_name == "Friendly International")
+    else:
+        query = query.filter(Club.league_name != "Friendly International")
 
     if name:
         query = query.filter(func.replace(Club.name, ' ', '').ilike(f"%{name.replace(' ', '')}%"))
