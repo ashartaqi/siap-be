@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from datetime import date
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
@@ -48,11 +48,11 @@ def get_teams(
     query = db.query(Club)
 
     if name:
-        query = query.filter(Club.name.ilike(f"%{name}%"))
+        query = query.filter(func.replace(Club.name, ' ', '').ilike(f"%{name.replace(' ', '')}%"))
     if league_name:
-        query = query.filter(Club.league_name.ilike(f"%{league_name}%"))
+        query = query.filter(func.replace(Club.league_name, ' ', '').ilike(f"%{league_name.replace(' ', '')}%"))
     if nationality_name:
-        query = query.filter(Club.nationality_name.ilike(nationality_name))
+        query = query.filter(func.replace(Club.nationality_name, ' ', '').ilike(f"%{nationality_name.replace(' ', '')}%"))
     if min_overall:
         query = query.filter(Club.overall >= min_overall)
     if max_overall:
@@ -105,11 +105,11 @@ def get_players(
         query = query.filter(Player.club_team_id == team_id)
     if name:
         query = query.filter(
-            Player.short_name.ilike(f"%{name}%") |
-            Player.long_name.ilike(f"%{name}%")
+            func.replace(Player.short_name, ' ', '').ilike(f"%{name.replace(' ', '')}%") |
+            func.replace(Player.long_name, ' ', '').ilike(f"%{name.replace(' ', '')}%")
         )
     if nationality_name:
-        query = query.filter(Player.nationality_name.ilike(nationality_name))
+        query = query.filter(func.replace(Player.nationality_name, ' ', '').ilike(f"%{nationality_name.replace(' ', '')}%"))
     if position:
         query = query.join(Player.positions).filter(PlayerPos.position == position.strip().upper())
     if min_overall:
