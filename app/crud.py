@@ -1,10 +1,11 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
+from datetime import date
 from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import contains_eager
+from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, Club, Player, PlayerStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 
 
 # USERS
@@ -42,16 +43,22 @@ def get_teams(
     max_overall: int = None, 
     min_attack: int = None, 
     min_midfield: int = None, 
-    min_defence: int = None):
+    min_defence: int = None,
+    team_type: str = "club"):
     
     query = db.query(Club)
 
+    if team_type == "national":
+        query = query.filter(Club.league_name == "Friendly International")
+    else:
+        query = query.filter(Club.league_name != "Friendly International")
+
     if name:
-        query = query.filter(Club.name.ilike(f"%{name}%"))
+        query = query.filter(func.replace(Club.name, ' ', '').ilike(f"%{name.replace(' ', '')}%"))
     if league_name:
-        query = query.filter(Club.league_name.ilike(f"%{league_name}%"))
+        query = query.filter(func.replace(Club.league_name, ' ', '').ilike(f"%{league_name.replace(' ', '')}%"))
     if nationality_name:
-        query = query.filter(Club.nationality_name.ilike(nationality_name))
+        query = query.filter(func.replace(Club.nationality_name, ' ', '').ilike(f"%{nationality_name.replace(' ', '')}%"))
     if min_overall:
         query = query.filter(Club.overall >= min_overall)
     if max_overall:
@@ -63,7 +70,7 @@ def get_teams(
     if min_defence:
         query = query.filter(Club.defence >= min_defence)
 
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(desc(Club.overall)).offset(skip).limit(limit).all()
 
 
 def add_fav_team(db, user, team):
@@ -95,7 +102,8 @@ def get_players(
     max_overall: int = None,
     min_age: int = None,
     max_age: int = None,
-    preferred_foot: str = None
+    preferred_foot: str = None,
+    skip: int = 0
 ):
     query = db.query(Player)
 
@@ -103,11 +111,11 @@ def get_players(
         query = query.filter(Player.club_team_id == team_id)
     if name:
         query = query.filter(
-            Player.short_name.ilike(f"%{name}%") |
-            Player.long_name.ilike(f"%{name}%")
+            func.replace(Player.short_name, ' ', '').ilike(f"%{name.replace(' ', '')}%") |
+            func.replace(Player.long_name, ' ', '').ilike(f"%{name.replace(' ', '')}%")
         )
     if nationality_name:
-        query = query.filter(Player.nationality_name.ilike(nationality_name))
+        query = query.filter(func.replace(Player.nationality_name, ' ', '').ilike(f"%{nationality_name.replace(' ', '')}%"))
     if position:
         query = query.join(Player.positions).filter(PlayerPos.position == position.strip().upper())
     if min_overall:
@@ -115,13 +123,27 @@ def get_players(
     if max_overall:
         query = query.filter(Player.overall <= max_overall)
     if min_age:
-        query = query.filter(Player.age >= min_age)
+        today = date.today()
+        max_dob_year = today.year - min_age
+        try:
+            max_dob = today.replace(year=max_dob_year)
+        except ValueError:
+            max_dob = today.replace(year=max_dob_year, day=28)
+        query = query.filter(Player.dob <= max_dob)
     if max_age:
-        query = query.filter(Player.age <= max_age)
+        today = date.today()
+        min_dob_year = today.year - max_age - 1
+        try:
+            min_dob = today.replace(year=min_dob_year)
+        except ValueError:
+            min_dob = today.replace(year=min_dob_year, day=28)
+        query = query.filter(Player.dob > min_dob)
     if preferred_foot:
         query = query.filter(Player.preferred_foot.ilike(preferred_foot))
 
-    return query.order_by(desc(Player.overall)).limit(limit).all()
+    query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
+
+    return query.order_by(desc(Player.overall)).offset(skip).limit(limit).all()
 
 
 def add_fav_player(db, user, player):
@@ -130,7 +152,17 @@ def add_fav_player(db, user, player):
 
 
 def get_fav_players(db, user):
-    return db.query(Player).join(FavouritePlayers, FavouritePlayers.player_id == Player.id).filter(FavouritePlayers.user_id == user).all()
+    return (
+        db.query(Player)
+        .join(FavouritePlayers, FavouritePlayers.player_id == Player.id)
+        .filter(FavouritePlayers.user_id == user)
+        .options(
+            joinedload(Player.player_stats),
+            joinedload(Player.positions),
+            joinedload(Player.goalkeeper_stats)
+        )
+        .all()
+    )
 
 
 def remove_fav_player(db, user, player):

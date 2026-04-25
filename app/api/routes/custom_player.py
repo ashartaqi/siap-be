@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
 from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
@@ -22,11 +23,9 @@ def create_custom_player(payload: CustomPlayerCreate, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("", response_model=CustomPlayerGet)
+@router.get("", response_model=Optional[CustomPlayerGet])
 def get_dream_player(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, current_user.id)
-    if not player:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No dream player found")
     return player
 
 

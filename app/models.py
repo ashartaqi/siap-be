@@ -38,7 +38,6 @@ class Player(Base):
     short_name = Column(String, index=True)
     long_name = Column(String, index=True)
     overall = Column(Integer, index=True)
-    age = Column(Integer, index=True)
     dob = Column(DateTime, index=True)
     height_cm = Column(Integer, index=True)
     weight_kg = Column(Integer, index=True)

@@ -22,12 +22,13 @@ def get_players(
     max_overall: int = None,
     min_age: int = None,
     max_age: int = None,
-    preferred_foot: str = None
+    preferred_foot: str = None,
+    skip: int = 0
 ):
     try:
         players = crud.get_players(
-            db, limit, team_id, name, nationality_name, position,
-            min_overall, max_overall, min_age, max_age, preferred_foot
+            db=db, limit=limit, skip=skip, team_id=team_id, name=name, nationality_name=nationality_name, position=position, 
+            min_overall=min_overall, max_overall=max_overall, min_age=min_age, max_age=max_age, preferred_foot=preferred_foot
         )
         return players
     except Exception as e:
@@ -41,7 +42,7 @@ def add_favourite(db: Session = Depends(get_db),current_user: User = Depends(get
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Player ID is required")
 
 
-@router.get("/fav")
+@router.get("/fav", response_model=list[Players])
 def get_favourite(db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     return crud.get_fav_players(db, current_user.id)
 
