@@ -229,7 +229,6 @@ def suggestion(formation: str):
     
 
 #to run- python3 -m app.core.DreamTeamSuggestion
-
 # if __name__ == "__main__":
 #     team = suggestion("4-3-3")
 

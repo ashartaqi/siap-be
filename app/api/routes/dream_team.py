@@ -7,6 +7,7 @@ from app.models import User
 from app.core.security import get_current_user
 from app.core.DreamTeamSuggestion import suggestion
 from app.schemas import DreamTeamCreate, DreamTeamGet, DreamTeamSlotUpdate
+from app.api.constants import FORMATIONS
 
 router = APIRouter()
 
@@ -64,63 +65,37 @@ def get_optimized_dream_team(formation: str, db: Session = Depends(get_db), curr
 
     team = suggestion(formation)
 
-    parts = formation.split("-")
-    num_def = int(parts[0])
-    num_mid = int(parts[1])
-    num_att = int(parts[2])
+    formation_data = next((f for f in FORMATIONS if f["id"] == formation), None)
+    if not formation_data:
+        raise HTTPException(status_code=400, detail="Invalid formation")
 
-    position_labels = (
-        ["LW", "ST", "RW"][:num_att] +                          # ATT
-        (["CM"] * num_mid) +                                     # MID
-        (["LB"] + ["CB"] * (num_def - 2) + ["RB"]) +            # DEF
-        ["GK"]                                                    # GK
-    )
+    rows = formation_data["rows"]
+
+    outfield_players = []
+    for group in reversed(team[1:]):
+        outfield_players.extend(group)
 
     slots = []
     slot_id = 1
     total_overall = 0
+    player_index = 0
 
-    # ATT row
-    for col, player in enumerate(team[3]):
-        slots.append({
-            "id": slot_id,
-            "position": position_labels[slot_id - 1],
-            "row": 0,
-            "col": col,
-            "player_id": player.id,
-            "player": player
-        })
-        total_overall += player.overall
-        slot_id += 1
+    for row_index, row_positions in enumerate(rows):
+        for col, position in enumerate(row_positions):
+            player = outfield_players[player_index]
+            slots.append({
+                "id": slot_id,
+                "position": position,
+                "row": row_index,
+                "col": col,
+                "player_id": player.id,
+                "player": player
+            })
+            total_overall += player.overall
+            slot_id += 1
+            player_index += 1
 
-    # MID row
-    for col, player in enumerate(team[2]):
-        slots.append({
-            "id": slot_id,
-            "position": "CM",
-            "row": 1,
-            "col": col,
-            "player_id": player.id,
-            "player": player
-        })
-        total_overall += player.overall
-        slot_id += 1
-
-    # DEF row
-    def_positions = ["LB"] + ["CB"] * (num_def - 2) + ["RB"]
-    for col, (player, pos) in enumerate(zip(team[1], def_positions)):
-        slots.append({
-            "id": slot_id,
-            "position": pos,
-            "row": 2,
-            "col": col,
-            "player_id": player.id,
-            "player": player
-        })
-        total_overall += player.overall
-        slot_id += 1
-
-    # GK
+    # GK last
     gk = team[0][0]
     slots.append({
         "id": slot_id,
