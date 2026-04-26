@@ -1,5 +1,6 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Header
 from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
@@ -12,6 +13,7 @@ from app.scripts.jobs import (
     fetch_fixtures as fetch_fixtures_job,
 )
 from app.api.constants import VALID_MATCH_STATUSES, FIXTURE_LEAGUES
+from app.core.config import settings
 
 
 router = APIRouter()
@@ -75,25 +77,31 @@ def get_current_season(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/update-fixtures")
-async def update_match(db: Session = Depends(get_db), current_user: User = Depends(get_current_user), id: int = None):
+async def update_match(background_tasks: BackgroundTasks, cron_key: Optional[str] = Header(None, alias="X-CRON-KEY")):
+    if cron_key != settings.CRON_KEY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to this endpoint is forbidden")
     try:
-        await update_fixtures_job()
-        return {"message": "Fixtures updated successfully"}
+        background_tasks.add_task(update_fixtures_job)
+        return {"message": "Fixtures update started in background"}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 @router.post("/fetch-leagues")
-async def fetch_leagues():
+async def fetch_leagues(background_tasks: BackgroundTasks, cron_key: Optional[str] = Header(None, alias="X-CRON-KEY")):
+    if cron_key != settings.CRON_KEY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to this endpoint is forbidden")
     try:
-        await fetch_leagues_job()
-        return {"message": "Leagues updated successfully"}
+        background_tasks.add_task(fetch_leagues_job)
+        return {"message": "Leagues update started in background"}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 @router.post("/fetch-fixtures")
-async def fetch_fixtures():
+async def fetch_fixtures(background_tasks: BackgroundTasks, cron_key: Optional[str] = Header(None, alias="X-CRON-KEY")):
+    if cron_key != settings.CRON_KEY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to this endpoint is forbidden")
     try:
-        await fetch_fixtures_job()
-        return {"message": "Fixtures added successfully"}
+        background_tasks.add_task(fetch_fixtures_job)
+        return {"message": "Fixtures addition started in background"}
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
