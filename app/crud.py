@@ -5,7 +5,7 @@ from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, PlayerStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 
 
 # USERS
@@ -103,7 +103,8 @@ def get_players(
     min_age: int = None,
     max_age: int = None,
     preferred_foot: str = None,
-    skip: int = 0
+    skip: int = 0,
+    order_by_stat: str = None
 ):
     query = db.query(Player)
 
@@ -143,7 +144,17 @@ def get_players(
 
     query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
 
-    return query.order_by(desc(Player.overall)).offset(skip).limit(limit).all()
+    if order_by_stat:
+        if hasattr(PlayerStats, order_by_stat):
+            query = query.outerjoin(Player.player_stats).order_by(desc(getattr(PlayerStats, order_by_stat)), desc(Player.overall))
+        elif hasattr(GoalkeeperStats, order_by_stat):
+            query = query.outerjoin(Player.goalkeeper_stats).order_by(desc(getattr(GoalkeeperStats, order_by_stat)), desc(Player.overall))
+        else:
+            query = query.order_by(desc(Player.overall))
+    else:
+        query = query.order_by(desc(Player.overall))
+
+    return query.offset(skip).limit(limit).all()
 
 
 def add_fav_player(db, user, player):
