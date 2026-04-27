@@ -122,8 +122,10 @@ def train_models():
     return position_model, rating_model, feature_scaler, le
 
 
-def save_models(position_model, rating_model, feature_scaler, le):
+def compile_and_save_models():
     os.makedirs(MODELS_DIR, exist_ok=True)
+    position_model, rating_model, feature_scaler, le = train_models()
+
     joblib.dump(position_model, os.path.join(MODELS_DIR, 'position_model.pkl'))
     joblib.dump(rating_model, os.path.join(MODELS_DIR, 'rating_model.pkl'))
     joblib.dump(feature_scaler, os.path.join(MODELS_DIR, 'feature_scaler.pkl'))
@@ -173,9 +175,7 @@ def predict_players(players):
 
 # python3 -m app.ai_models.dream_player
 if __name__ == "__main__":
-    position_model, rating_model, feature_scaler, le = train_models()
-    save_models(position_model, rating_model, feature_scaler, le)
-
+    compile_and_save_models()
     sample_players = [
         {
             "pace": 88, "shooting": 92, "passing": 80,
