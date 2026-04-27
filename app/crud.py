@@ -146,9 +146,11 @@ def get_players(
 
     if order_by_stat:
         if hasattr(PlayerStats, order_by_stat):
-            query = query.outerjoin(Player.player_stats).order_by(desc(getattr(PlayerStats, order_by_stat)), desc(Player.overall))
+            stat_col = getattr(PlayerStats, order_by_stat)
+            query = query.join(Player.player_stats).filter(stat_col.is_not(None)).order_by(desc(stat_col), desc(Player.overall))
         elif hasattr(GoalkeeperStats, order_by_stat):
-            query = query.outerjoin(Player.goalkeeper_stats).order_by(desc(getattr(GoalkeeperStats, order_by_stat)), desc(Player.overall))
+            stat_col = getattr(GoalkeeperStats, order_by_stat)
+            query = query.join(Player.goalkeeper_stats).filter(stat_col.is_not(None)).order_by(desc(stat_col), desc(Player.overall))
         else:
             query = query.order_by(desc(Player.overall))
     else:
