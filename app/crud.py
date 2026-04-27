@@ -103,8 +103,7 @@ def get_players(
     min_age: int = None,
     max_age: int = None,
     preferred_foot: str = None,
-    skip: int = 0,
-    sort_by: str = "overall"
+    skip: int = 0
 ):
     query = db.query(Player)
 
@@ -144,19 +143,7 @@ def get_players(
 
     query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
 
-    if sort_by and sort_by != "overall":
-        if sort_by in ["pace", "shooting", "passing", "dribbling", "defending", "physic"]:
-            # Use inner join to only get players with outfield stats, and sort by that stat
-            query = query.join(Player.player_stats).order_by(desc(getattr(PlayerStats, sort_by)), desc(Player.overall))
-        elif sort_by in ["diving", "handling", "kicking", "positioning", "reflexes", "speed"]:
-            # Use inner join to only get goalkeepers, and sort by that stat
-            query = query.join(Player.goalkeeper_stats).order_by(desc(getattr(GoalkeeperStats, sort_by)), desc(Player.overall))
-        else:
-            query = query.order_by(desc(Player.overall))
-    else:
-        query = query.order_by(desc(Player.overall))
-
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(desc(Player.overall)).offset(skip).limit(limit).all()
 
 
 def add_fav_player(db, user, player):
