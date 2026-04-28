@@ -5,7 +5,8 @@ from app.core.security import verify_password, get_password_hash
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, PlayerStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.api.constants import TEAM_TOTAL_OVERALL_MAX
 
 
 # USERS
@@ -97,13 +98,14 @@ def get_players(
     team_id: int = None,
     name: str = None,
     nationality_name: str = None,
-    position: str = None,
+    position: list[str] = None,
     min_overall: int = None,
     max_overall: int = None,
     min_age: int = None,
     max_age: int = None,
     preferred_foot: str = None,
-    skip: int = 0
+    skip: int = 0,
+    order_by_stat: str = None
 ):
     query = db.query(Player)
 
@@ -117,7 +119,11 @@ def get_players(
     if nationality_name:
         query = query.filter(func.replace(Player.nationality_name, ' ', '').ilike(f"%{nationality_name.replace(' ', '')}%"))
     if position:
-        query = query.join(Player.positions).filter(PlayerPos.position == position.strip().upper())
+        # handle both single string and list
+        if isinstance(position, str):
+            position = [position]
+        positions_upper = [p.strip().upper() for p in position]
+        query = query.join(Player.positions).filter(PlayerPos.position.in_(positions_upper))
     if min_overall:
         query = query.filter(Player.overall >= min_overall)
     if max_overall:
@@ -143,7 +149,19 @@ def get_players(
 
     query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
 
-    return query.order_by(desc(Player.overall)).offset(skip).limit(limit).all()
+    if order_by_stat:
+        if hasattr(PlayerStats, order_by_stat):
+            stat_col = getattr(PlayerStats, order_by_stat)
+            query = query.join(Player.player_stats).filter(stat_col.is_not(None)).order_by(desc(stat_col), desc(Player.overall))
+        elif hasattr(GoalkeeperStats, order_by_stat):
+            stat_col = getattr(GoalkeeperStats, order_by_stat)
+            query = query.join(Player.goalkeeper_stats).filter(stat_col.is_not(None)).order_by(desc(stat_col), desc(Player.overall))
+        else:
+            query = query.order_by(desc(Player.overall))
+    else:
+        query = query.order_by(desc(Player.overall))
+
+    return query.offset(skip).limit(limit).all()
 
 
 def add_fav_player(db, user, player):
@@ -371,8 +389,10 @@ def create_dream_team(db: Session, user_id: int, formation: str, slots: list):
         if not player:
             raise HTTPException(status_code=404, detail=f"Player {slot.player_id} not found")
         total_score += player.overall
-    
-    
+
+    if total_score > TEAM_TOTAL_OVERALL_MAX:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Total overall cannot exceed {TEAM_TOTAL_OVERALL_MAX}. You used {total_score}.")
+
     team=DreamTeam(user_id = user_id,formation=formation,total_score =(total_score)//11)
     create(db,team)
 
@@ -410,6 +430,9 @@ def update_dream_team(db: Session, user_id: int, formation: str, slots: list):
         if not player:
             raise HTTPException(status_code=404, detail=f"Player {slot.player_id} not found")
         total_score += player.overall
+
+    if total_score > TEAM_TOTAL_OVERALL_MAX:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Total overall cannot exceed {TEAM_TOTAL_OVERALL_MAX}. You used {total_score}.")
 
     # Update team fields
     team.formation = formation
