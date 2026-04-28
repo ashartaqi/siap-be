@@ -30,7 +30,7 @@ VALID_PREFERRED_FEET = ["Left", "Right"]
 # Player Stat Limits
 PLAYER_STAT_MIN = 1
 PLAYER_STAT_MAX = 99
-PLAYER_TOTAL_STATS_MAX = 570
+PLAYER_TOTAL_STATS_MAX = 500
 PLAYER_STATS = {
     "total": PLAYER_TOTAL_STATS_MAX,
     "min": PLAYER_STAT_MIN,
@@ -39,6 +39,26 @@ PLAYER_STATS = {
 
 # Team Overall Limits
 TEAM_TOTAL_OVERALL_MAX = 1000 # 11 players * 99 max overall
+
+# AI Model — Dream Player
+DREAM_PLAYER_COLUMNS = [
+    "player_positions",
+    "pace", "shooting", "passing",
+    "dribbling", "defending", "physic",
+    "overall",
+]
+
+DREAM_PLAYER_FEATURES = [
+    "pace", "shooting", "passing", "dribbling",
+    "defending", "physic",
+]
+
+POSITION_GROUPS = {
+    "GK": "GK",
+    "CB": "DEF", "LB": "DEF", "RB": "DEF", "LWB": "DEF", "RWB": "DEF",
+    "CDM": "MID", "CM": "MID", "CAM": "MID", "LM": "MID", "RM": "MID",
+    "LW": "ATT", "RW": "ATT", "CF": "ATT", "ST": "ATT", "LF": "ATT", "RF": "ATT",
+}
 
 # Formations
 FORMATIONS = [

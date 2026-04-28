@@ -9,7 +9,7 @@ from app.schemas import CustomPlayerCreate, CustomPlayerUpdate, CustomPlayerGet
 
 router = APIRouter()
 
-@router.post("", response_model=CustomPlayerCreate, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CustomPlayerGet, status_code=status.HTTP_201_CREATED)
 def create_custom_player(payload: CustomPlayerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, current_user.id)
     if player:
@@ -29,7 +29,7 @@ def get_dream_player(db: Session = Depends(get_db), current_user: User = Depends
     return player
 
 
-@router.patch("", response_model=CustomPlayerUpdate)
+@router.patch("", response_model=CustomPlayerGet)
 def update_dream_player(payload: CustomPlayerUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, current_user.id)
     if not player:

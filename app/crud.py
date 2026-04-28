@@ -7,6 +7,7 @@ from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
 from app.models import User, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 from app.api.constants import TEAM_TOTAL_OVERALL_MAX
+from app.ai_models.dream_player import predict_player
 
 
 # USERS
@@ -105,7 +106,13 @@ def get_players(
     max_age: int = None,
     preferred_foot: str = None,
     skip: int = 0,
-    order_by_stat: str = None
+    order_by_stat: str = None,
+    pace: int = None,
+    shooting: int = None,
+    passing: int = None,
+    dribbling: int = None,
+    defending: int = None,
+    physic: int = None,
 ):
     query = db.query(Player)
 
@@ -146,6 +153,21 @@ def get_players(
         query = query.filter(Player.dob > min_dob)
     if preferred_foot:
         query = query.filter(Player.preferred_foot.ilike(preferred_foot))
+
+    if pace or shooting or passing or dribbling or defending or physic:
+        query = query.join(Player.player_stats)
+    if pace:
+        query = query.filter(PlayerStats.pace == pace)
+    if shooting:
+        query = query.filter(PlayerStats.shooting == shooting)
+    if passing:
+        query = query.filter(PlayerStats.passing == passing)
+    if dribbling:
+        query = query.filter(PlayerStats.dribbling == dribbling)
+    if defending:
+        query = query.filter(PlayerStats.defending == defending)
+    if physic:
+        query = query.filter(PlayerStats.physic == physic)
 
     query = query.options(joinedload(Player.player_stats), joinedload(Player.positions), joinedload(Player.goalkeeper_stats))
 
@@ -303,16 +325,24 @@ def get_custom_player(db: Session, user_id: int):
 
 def add_custom_player(db: Session, user_id: int, **data):
     player = CustomPlayer(user_id=user_id, **data)
-    overall = (player.pace + player.shooting + player.passing + player.dribbling + player.defending + player.physic) / 6
+    overall, position = predict_player(
+        player.pace, player.shooting, player.passing,
+        player.dribbling, player.defending, player.physic,
+    )
     player.overall = overall
+    player.position = position
     return create(db, player, "Error creating custom player")
 
 
 def update_custom_player(db: Session, player, **data):
     for field, value in data.items():
         setattr(player, field, value)
-    overall = (player.pace + player.shooting + player.passing + player.dribbling + player.defending + player.physic) / 6
+    overall, position = predict_player(
+        player.pace, player.shooting, player.passing,
+        player.dribbling, player.defending, player.physic,
+    )
     player.overall = overall
+    player.position = position
     db.commit()
     db.refresh(player)
     return player
