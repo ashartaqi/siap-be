@@ -37,6 +37,9 @@ PLAYER_STATS = {
     "max": PLAYER_STAT_MAX,
 }
 
+# Team Overall Limits
+TEAM_TOTAL_OVERALL_MAX = 1000 # 11 players * 99 max overall
+
 # Formations
 FORMATIONS = [
     {

@@ -5,7 +5,9 @@ from app import crud
 from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
+from app.core.DreamTeamSuggestion import suggestion
 from app.schemas import DreamTeamCreate, DreamTeamGet, DreamTeamSlotUpdate
+from app.api.constants import FORMATIONS
 
 router = APIRouter()
 
@@ -57,3 +59,57 @@ def delete_dream_team(db: Session = Depends(get_db), current_user: User = Depend
     if result:
         return {"success": True}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dream team not found")
+
+@router.get("/{formation}")
+def get_optimized_dream_team(formation: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+
+    team = suggestion(formation)
+
+    formation_data = next((f for f in FORMATIONS if f["id"] == formation), None)
+    if not formation_data:
+        raise HTTPException(status_code=400, detail="Invalid formation")
+
+    rows = formation_data["rows"]
+
+    outfield_players = []
+    for group in reversed(team[1:]):
+        outfield_players.extend(group)
+
+    slots = []
+    slot_id = 1
+    total_overall = 0
+    player_index = 0
+
+    for row_index, row_positions in enumerate(rows):
+        for col, position in enumerate(row_positions):
+            player = outfield_players[player_index]
+            slots.append({
+                "id": slot_id,
+                "position": position,
+                "row": row_index,
+                "col": col,
+                "player_id": player.id,
+                "player": player
+            })
+            total_overall += player.overall
+            slot_id += 1
+            player_index += 1
+
+    # GK last
+    gk = team[0][0]
+    slots.append({
+        "id": slot_id,
+        "position": "GK",
+        "row": None,
+        "col": None,
+        "player_id": gk.id,
+        "player": gk
+    })
+    total_overall += gk.overall
+
+    return {
+        "id": 1,
+        "formation": formation,
+        "slots": slots,
+        "total_score": total_overall // 11
+    }
