@@ -23,12 +23,14 @@ def get_players(
     min_age: int = None,
     max_age: int = None,
     preferred_foot: str = None,
-    skip: int = 0
+    skip: int = 0,
+    order_by_stat: str = None
 ):
     try:
         players = crud.get_players(
             db=db, limit=limit, skip=skip, team_id=team_id, name=name, nationality_name=nationality_name, position=position, 
-            min_overall=min_overall, max_overall=max_overall, min_age=min_age, max_age=max_age, preferred_foot=preferred_foot
+            min_overall=min_overall, max_overall=max_overall, min_age=min_age, max_age=max_age, preferred_foot=preferred_foot,
+            order_by_stat=order_by_stat
         )
         return players
     except Exception as e:
