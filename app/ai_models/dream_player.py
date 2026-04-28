@@ -8,33 +8,20 @@ from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Input
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from sklearn.preprocessing import MultiLabelBinarizer, StandardScaler
 from sklearn.model_selection import train_test_split
+from app.api.constants import DREAM_PLAYER_COLUMNS, DREAM_PLAYER_FEATURES, POSITION_GROUPS
 
 CSV_FILE = os.path.join(os.path.dirname(__file__), "stats.csv")
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "compiled_models")
 
-COLUMNS = [
-    "player_positions",
-    "pace", "shooting", "passing",
-    "dribbling", "defending", "physic",
-    "overall",
-]
-
-FEATURES = [
-    "pace", "shooting", "passing", "dribbling",
-    "defending", "physic",
-]
-
-POSITION_GROUPS = {
-    "GK": "GK",
-    "CB": "DEF", "LB": "DEF", "RB": "DEF", "LWB": "DEF", "RWB": "DEF",
-    "CDM": "MID", "CM": "MID", "CAM": "MID", "LM": "MID", "RM": "MID",
-    "LW": "ATT", "RW": "ATT", "CF": "ATT", "ST": "ATT", "LF": "ATT", "RF": "ATT",
-}
+_position_model = None
+_rating_model = None
+_feature_scaler = None
+_mlb = None
 
 
 def load_data(csv_file):
-    df = pd.read_csv(csv_file, usecols=COLUMNS)
-    df = df.dropna(subset=COLUMNS)
+    df = pd.read_csv(csv_file, usecols=DREAM_PLAYER_COLUMNS)
+    df = df.dropna(subset=DREAM_PLAYER_COLUMNS)
 
     df["positions_list"] = (
         df["player_positions"]
@@ -57,7 +44,7 @@ def preprocess_data(df):
     mlb = MultiLabelBinarizer()
     y_positions = mlb.fit_transform(df["positions_list"]).astype("float32")
 
-    X = df[FEATURES].values.astype("float32")
+    X = df[DREAM_PLAYER_FEATURES].values.astype("float32")
     y_rating = df["overall"].values.astype("float32")
 
     return X, y_rating, y_positions, mlb
@@ -198,20 +185,39 @@ def compile_and_save_models():
     joblib.dump(mlb, os.path.join(MODELS_DIR, "position_binarizer.pkl"))
 
 
-def predict_players(players):
-    position_model = tf.keras.models.load_model(os.path.join(MODELS_DIR, "position_model.keras"))
-    rating_model = tf.keras.models.load_model(os.path.join(MODELS_DIR, "rating_model.keras"))
-    feature_scaler = joblib.load(os.path.join(MODELS_DIR, "feature_scaler.pkl"))
-    mlb = joblib.load(os.path.join(MODELS_DIR, "position_binarizer.pkl"))
+def _load_models():
+    global _position_model, _rating_model, _feature_scaler, _mlb
+    if _position_model is None:
+        _position_model = tf.keras.models.load_model(os.path.join(MODELS_DIR, "position_model.keras"))
+        _rating_model = tf.keras.models.load_model(os.path.join(MODELS_DIR, "rating_model.keras"))
+        _feature_scaler = joblib.load(os.path.join(MODELS_DIR, "feature_scaler.pkl"))
+        _mlb = joblib.load(os.path.join(MODELS_DIR, "position_binarizer.pkl"))
+
+
+def predict_player(pace, shooting, passing, dribbling, defending, physic):
+    """Return (overall: int, position: str) predicted by the saved AI models."""
+    _load_models()
+    X = np.array([[pace, shooting, passing, dribbling, defending, physic]], dtype="float32")
+    X_scaled = _feature_scaler.transform(X)
+    rating = float(_rating_model.predict(X_scaled, verbose=0).flatten()[0])
+    probs = _position_model.predict(X_scaled, verbose=0)[0]
+    primary_pos = list(_mlb.classes_)[int(np.argmax(probs))]
+    return round(float(np.clip(rating, 0, 100))), primary_pos
+
+
+
+# For testing purpose
+def test_predict_players(players):
+    _load_models()
 
     df = pd.DataFrame(players)
-    X_new = df[FEATURES].values.astype("float32")
-    X_new_scaled = feature_scaler.transform(X_new)
+    X_new = df[DREAM_PLAYER_FEATURES].values.astype("float32")
+    X_new_scaled = _feature_scaler.transform(X_new)
 
-    rating_preds = rating_model.predict(X_new_scaled, verbose=0).flatten()
-    position_probs = position_model.predict(X_new_scaled, verbose=0)
+    rating_preds = _rating_model.predict(X_new_scaled, verbose=0).flatten()
+    position_probs = _position_model.predict(X_new_scaled, verbose=0)
 
-    classes = list(mlb.classes_)
+    classes = list(_mlb.classes_)
 
     results = []
     for i, (rating, probs) in enumerate(zip(rating_preds, position_probs)):
@@ -233,7 +239,7 @@ def predict_players(players):
 
 # python3 -m app.ai_models.dream_player
 if __name__ == "__main__":
-    compile_and_save_models()
+    # compile_and_save_models()
     sample_players = [
         {
             "pace": 88, "shooting": 92, "passing": 80,
@@ -257,7 +263,7 @@ if __name__ == "__main__":
         },
     ]
 
-    results = predict_players(sample_players)
+    results = test_predict_players(sample_players)
 
     for r in results:
         print(f"\nPlayer {r['player']}:")

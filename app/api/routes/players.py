@@ -24,13 +24,20 @@ def get_players(
     max_age: int = None,
     preferred_foot: str = None,
     skip: int = 0,
-    order_by_stat: str = None
+    order_by_stat: str = None,
+    pace: int = None,
+    shooting: int = None,
+    passing: int = None,
+    dribbling: int = None,
+    defending: int = None,
+    physic: int = None,
 ):
     try:
         players = crud.get_players(
-            db=db, limit=limit, skip=skip, team_id=team_id, name=name, nationality_name=nationality_name, position=position, 
+            db=db, limit=limit, skip=skip, team_id=team_id, name=name, nationality_name=nationality_name, position=position,
             min_overall=min_overall, max_overall=max_overall, min_age=min_age, max_age=max_age, preferred_foot=preferred_foot,
-            order_by_stat=order_by_stat
+            order_by_stat=order_by_stat, pace=pace, shooting=shooting, passing=passing,
+            dribbling=dribbling, defending=defending, physic=physic,
         )
         return players
     except Exception as e:

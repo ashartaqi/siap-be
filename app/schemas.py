@@ -229,7 +229,6 @@ class PlayerBase(BaseModel):
 
 class CustomPlayerCreate(PlayerBase):
     name: str
-    position: str
     nationality: str
     shirt_number: int
     preferred_foot: str
@@ -243,7 +242,6 @@ class CustomPlayerCreate(PlayerBase):
 
 class CustomPlayerUpdate(PlayerBase):
     name: Optional[str] = None
-    position: Optional[str] = None
     nationality: Optional[str] = None
     shirt_number: Optional[int] = None
     preferred_foot: Optional[str] = None
@@ -255,6 +253,7 @@ class CustomPlayerUpdate(PlayerBase):
     physic: Optional[int] = None
 
 class CustomPlayerGet(CustomPlayerCreate):
+    position: str
     overall: int
 
 
