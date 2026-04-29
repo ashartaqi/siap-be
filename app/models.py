@@ -17,9 +17,9 @@ class RefreshToken(Base):
     __tablename__ = "refresh_token"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-    token_hash = Column(String, index=True)
-    expires_at = Column(DateTime, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=func.now())
 
 class Club(Base):

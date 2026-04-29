@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import jwt
 import secrets
+import hashlib
 from pwdlib import PasswordHash
 from datetime import datetime, timedelta, timezone
 from jwt.exceptions import InvalidTokenError
@@ -53,12 +54,22 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Se
 
     return user
 
-def create_refresh_token():
+def generate_refresh_token() -> str:
     return secrets.token_urlsafe(32)
 
-def hash_refresh_token(refresh_token: str) -> str:
-    return password_hash.hash(refresh_token)
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
+def set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key="refresh_token",
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_SECONDS,
+        path="/user",
+    )
 
-def verify_refresh_token(plain_token: str, hashed_token: str) -> bool:
-    return password_hash.verify(plain_token, hashed_token)
+def clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(key="refresh_token", path="/user")
