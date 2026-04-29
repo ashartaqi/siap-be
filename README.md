@@ -6,7 +6,7 @@ A FastAPI backend application with PostgreSQL database.
 
 Before running this application, ensure you have the following installed:
 
-- **Python**: 3.13.5
+- **Python**: 3.12.12
 - **PostgreSQL**: 16
 
 ## Setup
