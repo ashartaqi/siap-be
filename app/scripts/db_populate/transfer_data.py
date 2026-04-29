@@ -14,7 +14,6 @@ COLUMNS_TEAMS = [
     "midfield",
     "defence",
     "home_stadium",
-    "captain"
 ]
 
 CSV_FILE = os.path.join(os.path.dirname(__file__), "male_players.csv")
@@ -27,8 +26,6 @@ COLUMNS = [
     "height_cm",
     "weight_kg",
     "club_team_id",
-    "club_name",
-    "nationality_id",
     "nationality_name",
     "preferred_foot",
     "weak_foot",
@@ -82,7 +79,6 @@ def import_teams():
                     "midfield": safe_int(row.get("midfield")),
                     "defence": safe_int(row.get("defence")),
                     "home_stadium": row.get("home_stadium"),
-                    "captain": row.get("captain"),
                 })
 
             db.bulk_insert_mappings(Club, teams_data)
@@ -123,8 +119,6 @@ def import_players():
                     height_cm=safe_int(row.get("height_cm")),
                     weight_kg=safe_int(row.get("weight_kg")),
                     club_team_id=safe_int(row.get("club_team_id")),
-                    club_name=row.get("club_name"),
-                    nationality_id=safe_int(row.get("nationality_id")),
                     nationality_name=row.get("nationality_name"),
                     preferred_foot=row.get("preferred_foot"),
                     weak_foot=safe_int(row.get("weak_foot")),
@@ -175,8 +169,6 @@ def import_goalkeepers():
                     height_cm=safe_int(row.get("height_cm")),
                     weight_kg=safe_int(row.get("weight_kg")),
                     club_team_id=safe_int(row.get("club_team_id")),
-                    club_name=row.get("club_name"),
-                    nationality_id=safe_int(row.get("nationality_id")),
                     nationality_name=row.get("nationality_name"),
                     preferred_foot=row.get("preferred_foot"),
                     weak_foot=safe_int(row.get("weak_foot")),

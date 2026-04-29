@@ -87,7 +87,6 @@ class Players(BaseModel):
     club_team_id: Optional[int] = None
     club_name: Optional[str] = None
 
-    nationality_id: int
     nationality_name: str
 
     preferred_foot: str
@@ -110,6 +109,22 @@ class Players(BaseModel):
         if v and hasattr(v[0], "position"):
             return [p.position for p in v]
         return v
+
+class Team(BaseModel):
+    id: int
+    name: str
+    league_name: Optional[str] = None
+    nationality_name: Optional[str] = None
+    overall: Optional[int] = None
+    attack: Optional[int] = None
+    midfield: Optional[int] = None
+    defence: Optional[int] = None
+    home_stadium: Optional[str] = None
+    logo_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 
 class Votes(BaseModel):
     id: int

@@ -61,8 +61,8 @@ def fitness(team: list) -> float:
     for group in team:
         for p in group:
             total += p.overall
-            clubs[p.club_team_id]    = clubs.get(p.club_team_id, 0) + 1
-            nations[p.nationality_id] = nations.get(p.nationality_id, 0) + 1
+            clubs[p.club_team_id]       = clubs.get(p.club_team_id, 0) + 1
+            nations[p.nationality_name] = nations.get(p.nationality_name, 0) + 1
 
     if total > TEAM_TOTAL_OVERALL_MAX:
         return -9999
