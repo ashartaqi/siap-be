@@ -329,6 +329,41 @@ def get_votes(
     return query.limit(limit).all()
 
 
+def get_votes_with_users(
+    db: Session,
+    fixture_id: int,
+    limit: int = 50,
+):
+    """Get all votes for a fixture, joined with user info."""
+    rows = (
+        db.query(
+            Votes.id,
+            Votes.user_id,
+            User.username,
+            User.first_name,
+            Votes.fixture_id,
+            Votes.prediction_home_score,
+            Votes.prediction_away_score,
+        )
+        .join(User, User.id == Votes.user_id)
+        .filter(Votes.fixture_id == fixture_id)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "username": r.username,
+            "first_name": r.first_name,
+            "fixture_id": r.fixture_id,
+            "prediction_home_score": r.prediction_home_score,
+            "prediction_away_score": r.prediction_away_score,
+        }
+        for r in rows
+    ]
+
+
 def create_vote(
     db: Session,
     user_id: int,
@@ -336,8 +371,10 @@ def create_vote(
     prediction_home_score: int,
     prediction_away_score: int,
 ):
-    if db.query(Votes).filter(Votes.fixture_id == fixture_id, Votes.user_id == user_id).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vote already exists")
+    """Cast a vote — deletes any existing vote by this user first (one vote at a time)."""
+    db.query(Votes).filter(Votes.user_id == user_id).delete(synchronize_session=False)
+    db.flush()
+
     vote = Votes(
         user_id=user_id,
         fixture_id=fixture_id,
@@ -347,15 +384,44 @@ def create_vote(
     return create(db, vote, "Error creating vote")
 
 
+def get_user_active_vote(db: Session, user_id: int):
+    """Return the single active vote for a user (if any)."""
+    return db.query(Votes).filter(Votes.user_id == user_id).first()
+
+
 def get_user_votes(db: Session, user_id: int):
     return db.query(Votes).filter(Votes.user_id == user_id).all()
 
 
-def delete_vote(db: Session, user_id: int, vote_id: int):
-    vote = db.query(Votes).filter(
-        Votes.id == vote_id,
-        Votes.user_id == user_id
-    ).first()
+def update_vote(
+    db: Session,
+    user_id: int,
+    fixture_id: int,
+    prediction_home_score: int,
+    prediction_away_score: int,
+):
+    """Update the prediction on the user's current vote, or move it to a new fixture."""
+    vote = db.query(Votes).filter(Votes.user_id == user_id).first()
+    if not vote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active vote found")
+    
+    vote.fixture_id = fixture_id
+    vote.prediction_home_score = prediction_home_score
+    vote.prediction_away_score = prediction_away_score
+    db.commit()
+    db.refresh(vote)
+    return vote
+
+
+def delete_vote(db: Session, user_id: int, vote_id: int = None):
+    if vote_id:
+        vote = db.query(Votes).filter(
+            Votes.id == vote_id,
+            Votes.user_id == user_id
+        ).first()
+    else:
+        vote = db.query(Votes).filter(Votes.user_id == user_id).first()
+    
     if vote:
         db.delete(vote)
         db.commit()

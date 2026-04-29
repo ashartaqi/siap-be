@@ -136,6 +136,23 @@ class Votes(BaseModel):
     class Config:
         from_attributes = True
 
+class VoteCreate(BaseModel):
+    fixture_id: int
+    prediction_home_score: int
+    prediction_away_score: int
+
+class VoteWithUser(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    first_name: str
+    fixture_id: int
+    prediction_home_score: int
+    prediction_away_score: int
+
+    class Config:
+        from_attributes = True
+
 class Fixtures(BaseModel):
     id: int
     date: str
