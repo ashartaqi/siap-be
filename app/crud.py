@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
-from datetime import date
-from app.core.security import verify_password, get_password_hash
+from datetime import date, datetime, timezone, timedelta
+from app.core.security import verify_password, get_password_hash, hash_refresh_token, verify_refresh_token
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 from app.api.constants import TEAM_TOTAL_OVERALL_MAX
 from app.ai_models.dream_player import predict_player
 
@@ -27,6 +27,71 @@ def create_user(db: Session, username: str, email: str, first_name: str, last_na
     user = User(username=username, email=email,first_name=first_name, last_name=last_name, password=hashed_pw, super_user=super_user)
     return create(db, user, "Username or email already exists")
 
+def create_refresh_token_db(db: Session, user_id: int, refresh_token: str) -> RefreshToken:
+    """
+    Create and store a refresh token for a user.
+    """
+    token_entry = RefreshToken(
+        user_id=user_id,
+        token_hash=hash_refresh_token(refresh_token),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7)  # ✅ Aware
+    )
+    return create(db, token_entry, "Error creating refresh token")
+
+def get_latest_refresh_token(db: Session, user_id: int) -> RefreshToken | None:
+    return (
+        db.query(RefreshToken)
+        .filter(RefreshToken.user_id == user_id)
+        .order_by(RefreshToken.created_at.desc())
+        .first()
+    )
+
+def verify_refresh_token_db(db: Session, user_id: int, plain_refresh_token: str) -> bool:
+    """
+    Verify that a refresh token is valid for a user.
+    """
+    token_entry = get_latest_refresh_token(db, user_id)
+    
+    if not token_entry:
+        return False
+    
+    # ✅ FIXED: Handle both naive and aware datetimes
+    expires_at = token_entry.expires_at
+    
+    # Make sure we have an aware datetime for comparison
+    if expires_at.tzinfo is None:
+        # Naive datetime - assume UTC
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    # Now both are aware
+    if expires_at < datetime.now(timezone.utc):
+        return False
+    
+    # Verify token hash
+    return verify_refresh_token(plain_refresh_token, token_entry.token_hash)
+
+def delete_refresh_token_by_user(db: Session, user_id: int, token_id: int) -> bool:
+    token_entry = db.query(RefreshToken).filter(
+        RefreshToken.id == token_id,
+        RefreshToken.user_id == user_id
+    ).first()
+    
+    if token_entry:
+        db.delete(token_entry)
+        db.commit()
+        return True
+    return False
+
+def delete_expired_refresh_tokens(db: Session, user_id: int) -> int:
+    deleted_count = db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.expires_at < datetime.now(timezone.utc)
+    ).delete()
+    db.commit()
+    return deleted_count
+
+def get_user_by_email(db: Session, email: str) -> User | None:
+    return db.query(User).filter(User.email == email).first()
 
 def authenticate_user(db: Session, email: str, password: str):
     user = db.query(User).filter(User.email == email).first()

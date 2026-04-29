@@ -48,6 +48,11 @@ class RegisteredUser(BaseModel):
 class Token(BaseModel):
     token: str
     token_type: str
+    refresh_token: str
+
+class RefreshRequest(BaseModel):
+    email: EmailStr
+    refresh_token: str
 
 class PlayerStats(BaseModel):
     pace: Optional[int]

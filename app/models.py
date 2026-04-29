@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 
@@ -13,6 +13,14 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
 
+class RefreshToken(Base):
+    __tablename__ = "refresh_token"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    token_hash = Column(String, index=True)
+    expires_at = Column(DateTime, index=True)
+    created_at = Column(DateTime, default=func.now())
 
 class Club(Base):
     __tablename__ = "club"
