@@ -131,7 +131,8 @@ class Match(Base):
     time = Column(String, nullable=True)
     team1 = Column(String, nullable=False)
     team2 = Column(String, nullable=False)
-    score_ft = Column(String, nullable=True)
+    team1_score = Column(Integer, nullable=True)
+    team2_score = Column(Integer, nullable=True)
     winner = Column(String, nullable=True)
     league = Column(String, nullable=True)
 
