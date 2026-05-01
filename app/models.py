@@ -229,3 +229,13 @@ class DreamTeamSlot(Base):
     player_id =Column(Integer,ForeignKey("players.id",ondelete = "CASCADE"), nullable = False)
     player = relationship("Player", lazy="joined") 
 
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")

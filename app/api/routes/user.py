@@ -7,7 +7,9 @@ from app.core.security import (
     generate_refresh_token,
     set_refresh_cookie,
     clear_refresh_cookie,
+    get_current_user,
 )
+from app.models import User
 from app.crud import (
     authenticate_user,
     create_refresh_token,
@@ -108,3 +110,7 @@ def logout(
     if refresh_token:
         revoke_refresh_token(db, refresh_token)
     clear_refresh_cookie(response)
+
+@router.get("/me", response_model=RegisteredUser)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user

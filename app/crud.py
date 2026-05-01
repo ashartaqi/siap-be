@@ -5,7 +5,7 @@ from app.core.security import verify_password, get_password_hash, hash_refresh_t
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage
 from app.api.constants import TEAM_TOTAL_OVERALL_MAX
 from app.ai_models.dream_player import predict_player
 
@@ -522,6 +522,34 @@ def update_dream_team_slot(db: Session, user_id: int, slot_id: int, player_id: i
     db.commit()
     db.refresh(team)
     return team
+
+# CHAT
+def get_chat_messages(db: Session, limit: int = 50):
+    rows = db.query(
+        ChatMessage.id,
+        ChatMessage.user_id,
+        User.username,
+        ChatMessage.content,
+        ChatMessage.created_at
+    ).join(User, User.id == ChatMessage.user_id).order_by(desc(ChatMessage.created_at)).limit(limit).all()
+    
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "username": r.username,
+            "content": r.content,
+            "created_at": r.created_at
+        }
+        for r in reversed(rows)
+    ]
+
+def create_chat_message(db: Session, user_id: int, content: str):
+    message = ChatMessage(user_id=user_id, content=content)
+    return create(db, message, "Error sending message")
+
+
+
 
 def create_dream_team(db: Session, user_id: int, formation: str, slots: list):
 

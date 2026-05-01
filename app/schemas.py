@@ -325,5 +325,19 @@ class DreamTeamGet(BaseModel):
         from_attributes = True
 
 
+class ChatMessageCreate(BaseModel):
+    content: str
+
+class ChatMessage(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 
     
