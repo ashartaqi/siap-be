@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.db import Base
-from app.api.constants import INITIAL_BB_BALANCE
+from app.constants import INITIAL_BB_BALANCE
 
 class User(Base):
     __tablename__ = "users"
@@ -14,8 +14,6 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
     bb_balance = Column(Integer, default=INITIAL_BB_BALANCE)
-    last_login_reward_at = Column(DateTime, nullable=True)
-    last_chat_reward_at = Column(DateTime, nullable=True)
 
 class RefreshToken(Base):
     __tablename__ = "refresh_token"
@@ -244,6 +242,10 @@ class ChatMessage(Base):
 
     user = relationship("User")
 
+    @property
+    def username(self) -> str:
+        return self.user.username if self.user else ""
+
 
 class MatchComment(Base):
     __tablename__ = "match_comments"
@@ -257,12 +259,16 @@ class MatchComment(Base):
     user = relationship("User")
     fixture = relationship("Fixtures")
 
+    @property
+    def username(self) -> str:
+        return self.user.username if self.user else ""
+
 class UnlockedPlayer(Base):
     __tablename__ = "unlocked_players"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
-    unlocked_at = Column(DateTime, default=func.now())
 
     user = relationship("User")
     player = relationship("Player")
+

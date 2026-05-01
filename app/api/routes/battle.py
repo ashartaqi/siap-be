@@ -1,38 +1,38 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
-from app.models import User, DreamTeam
+from app.models import User
 from app.core.security import get_current_user
 from app.schemas import (
-    DreamTeamGet as DreamTeamSchema, 
-    CustomPlayerGet as CustomPlayerSchema, 
+    DreamTeamGet as DreamTeamSchema,
+    CustomPlayerGet as CustomPlayerSchema,
     MatchSimulationResult,
     BattleUser,
-    BattleRewardResponse
 )
-from app.api.constants import (
+from app.constants import (
     BATTLE_PARTICIPATION_REWARD,
     BATTLE_WIN_REWARD,
-    BATTLE_DRAW_REWARD
+    BATTLE_DRAW_REWARD,
 )
-from app.core.engine import FootballEngine, EngineTeam, EnginePlayer
+from app.api.utils.engine import FootballEngine, map_team_to_engine
 
 router = APIRouter()
+
 
 @router.get("/users", response_model=list[BattleUser])
 def get_battle_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     users, users_with_teams, users_with_players = crud.get_battle_users_from_db(db, current_user.id)
-    
     return [
         BattleUser(
             id=u.id,
             username=u.username,
             has_team=u.id in users_with_teams,
-            has_player=u.id in users_with_players
+            has_player=u.id in users_with_players,
         )
         for u in users
     ]
+
 
 @router.get("/team/{user_id}", response_model=DreamTeamSchema)
 def get_user_dream_team(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -41,6 +41,7 @@ def get_user_dream_team(user_id: int, db: Session = Depends(get_db), current_use
         raise HTTPException(status_code=404, detail="Dream team not found for this user")
     return team
 
+
 @router.get("/player/{user_id}", response_model=CustomPlayerSchema)
 def get_user_custom_player(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     player = crud.get_custom_player(db, user_id)
@@ -48,58 +49,6 @@ def get_user_custom_player(user_id: int, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=404, detail=f"Custom player not found for user_id {user_id}")
     return player
 
-@router.post("/reward", response_model=BattleRewardResponse)
-def award_battle_reward(result: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # result: 'win', 'loss', 'draw'
-    reward = BATTLE_PARTICIPATION_REWARD
-    if result == 'win':
-        reward += BATTLE_WIN_REWARD
-    elif result == 'draw':
-        reward += BATTLE_DRAW_REWARD 
-        
-    updated_user = crud.add_bb_reward(db, current_user.id, reward)
-    return BattleRewardResponse(new_balance=updated_user.bb_balance, reward=reward)
-
-def _map_team_to_engine(team: DreamTeam, team_name: str) -> EngineTeam:
-    engine_players = []
-    for slot in team.slots:
-        p = slot.player
-        role = "MID"
-        pos = slot.position
-        if pos in ["ST", "LW", "RW", "CF", "LF", "RF"]:
-            role = "FWD"
-        elif pos in ["CB", "LB", "RB", "LWB", "RWB", "GK"]:
-            role = "DEF"
-
-        stamina = 100.0
-        defense = 50.0
-        passing = 50.0
-        attack = 50.0
-        finishing = 50.0
-
-        if p.player_stats:
-            stamina = float(p.player_stats.physic) if p.player_stats.physic else 100.0
-            defense = float(p.player_stats.defending) if p.player_stats.defending else 50.0
-            passing = float(p.player_stats.passing) if p.player_stats.passing else 50.0
-            attack = float(p.player_stats.shooting) if p.player_stats.shooting else 50.0
-            finishing = float(p.player_stats.shooting) if p.player_stats.shooting else 50.0
-        elif p.goalkeeper_stats:
-            defense = float(p.goalkeeper_stats.handling) if p.goalkeeper_stats.handling else 80.0
-            passing = float(p.goalkeeper_stats.kicking) if p.goalkeeper_stats.kicking else 60.0
-            attack = 10.0
-            finishing = 10.0
-
-        engine_players.append(EnginePlayer(
-            name=p.short_name,
-            role=role,
-            attack=attack,
-            passing=passing,
-            defense=defense,
-            finishing=finishing,
-            stamina=stamina
-        ))
-
-    return EngineTeam(name=team_name, players=engine_players)
 
 @router.post("/simulate/{opponent_id}", response_model=MatchSimulationResult)
 def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -111,17 +60,16 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
     if not opp_team:
         raise HTTPException(status_code=400, detail="Opponent does not have a Dream Team")
 
-    engine_me = _map_team_to_engine(my_team, current_user.username)
-    
     opp_user = crud.get_user_by_id(db, opponent_id)
     opp_name = opp_user.username if opp_user else f"User {opponent_id}"
-    engine_opp = _map_team_to_engine(opp_team, opp_name)
 
-    engine = FootballEngine(engine_me, engine_opp)
+    engine = FootballEngine(
+        map_team_to_engine(my_team, current_user.username),
+        map_team_to_engine(opp_team, opp_name),
+    )
     result = engine.simulate()
 
     reward = BATTLE_PARTICIPATION_REWARD
-    winner = "draw"
     if result.score1 > result.score2:
         reward += BATTLE_WIN_REWARD
         winner = "me"
@@ -129,10 +77,12 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
         winner = "opponent"
     else:
         reward += BATTLE_DRAW_REWARD
+        winner = "draw"
 
     updated_user = crud.add_bb_reward(db, current_user.id, reward)
+    total = max(1, result.stats.possession1 + result.stats.possession2)
 
-    return MatchSimulationResult(
+    match_result = MatchSimulationResult(
         score1=result.score1,
         score2=result.score2,
         stats={
@@ -140,12 +90,13 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
             "shots2": result.stats.shots2,
             "xg1": result.stats.xg1,
             "xg2": result.stats.xg2,
-            "possession1": int((result.stats.possession1 / max(1, result.stats.possession1 + result.stats.possession2)) * 100),
-            "possession2": int((result.stats.possession2 / max(1, result.stats.possession1 + result.stats.possession2)) * 100),
+            "possession1": int(result.stats.possession1 / total * 100),
+            "possession2": int(result.stats.possession2 / total * 100),
         },
         log=result.log,
         winner=winner,
         reward=reward,
-        new_balance=updated_user.bb_balance
+        new_balance=updated_user.bb_balance,
     )
 
+    return match_result

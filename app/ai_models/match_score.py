@@ -35,7 +35,7 @@ from app.core.db import SessionLocal
 from app.models import Club, LeagueStandings, Match
 
 # ---------------------------------------------------------------------------
-COLUMNS      = ["team1", "team2", "winner", "team1_score", "team2_score",
+COLUMNS     = ["team1", "team2", "winner", "team1_score", "team2_score",
                  "league", "date"]
 LEAGUES      = ["en.1", "es.1", "de.1", "it.1", "fr.1"]
 MODELS_DIR   = os.path.join(os.path.dirname(__file__), "compiled_models")
@@ -59,11 +59,11 @@ FEATURE_COLS = [
 ]
 
 # Lazy inference cache
-_team_enc:       Optional[LabelEncoder]   = None
+_team_enc: Optional[LabelEncoder] = None
 _feature_scaler: Optional[StandardScaler] = None
 _reg_t1 = None
 _reg_t2 = None
-_meta:   Optional[dict] = None          # stores draw_threshold + known_teams
+_meta: Optional[dict] = None  # stores draw_threshold + known_teams
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ def add_features(df: pd.DataFrame, clubs_df: pd.DataFrame,
 
 def _score_to_outcome(t1: float, t2: float, threshold: float = 0.5) -> str:
     d = t1 - t2
-    if d >  threshold: return "win"
+    if d > threshold: return "win"
     if d < -threshold: return "loss"
     return "draw"
 
@@ -222,7 +222,7 @@ def _calibrate_threshold(pred_t1, pred_t2, actual_t1, actual_t2) -> float:
     """Grid-search the threshold that maximises outcome accuracy on training."""
     best_t, best_acc = 0.3, 0.0
     for t in np.arange(0.1, 1.5, 0.05):
-        preds   = [_score_to_outcome(p1, p2, t) for p1, p2 in zip(pred_t1, pred_t2)]
+        preds = [_score_to_outcome(p1, p2, t) for p1, p2 in zip(pred_t1, pred_t2)]
         actuals = [_score_to_outcome(a1, a2, 0.0) for a1, a2 in zip(actual_t1, actual_t2)]
         acc = sum(p == a for p, a in zip(preds, actuals)) / len(preds)
         if acc > best_acc:
@@ -239,10 +239,10 @@ def compile_model() -> None:
     print("STEP 1 — Loading data")
     print("=" * 60)
 
-    df        = _load_matches()
-    clubs_df  = _load_clubs()
+    df = _load_matches()
+    clubs_df = _load_clubs()
     standings = _load_standings()
-    form      = _build_rolling_form(df)
+    form = _build_rolling_form(df)
 
     df = df[df["team1_score"].notna() & df["team2_score"].notna()].copy()
     df = add_features(df, clubs_df, standings, form)
@@ -254,10 +254,10 @@ def compile_model() -> None:
     df["team1_enc"] = team_enc.transform(df["team1"])
     df["team2_enc"] = team_enc.transform(df["team2"])
 
-    X   = df[FEATURE_COLS].values.astype(float)
+    X = df[FEATURE_COLS].values.astype(float)
     y_t1 = df["team1_score"].values.astype(float)
     y_t2 = df["team2_score"].values.astype(float)
-    idx  = np.arange(len(X))
+    idx = np.arange(len(X))
 
     X_train, X_test, yt1_tr, yt1_te, yt2_tr, yt2_te, idx_tr, idx_te = train_test_split(
         X, y_t1, y_t2, idx, test_size=0.20, random_state=42,
@@ -309,7 +309,7 @@ def compile_model() -> None:
     print(f"  Best threshold: {draw_thr}")
 
     actual_out = [_score_to_outcome(a, b, 0.0) for a, b in zip(yt1_te, yt2_te)]
-    pred_out   = [_score_to_outcome(p, q, draw_thr) for p, q in zip(pred_t1, pred_t2)]
+    pred_out = [_score_to_outcome(p, q, draw_thr) for p, q in zip(pred_t1, pred_t2)]
     acc = sum(a == p for a, p in zip(actual_out, pred_out)) / len(actual_out)
     print(f"  Outcome accuracy: {acc*100:.2f}%")
 
@@ -319,9 +319,9 @@ def compile_model() -> None:
     print("=" * 60)
     os.makedirs(MODELS_DIR, exist_ok=True)
     joblib.dump(team_enc, os.path.join(MODELS_DIR, "match_team_enc.pkl"))
-    joblib.dump(scaler,   os.path.join(MODELS_DIR, "match_feature_scaler.pkl"))
-    joblib.dump(reg_t1,   os.path.join(MODELS_DIR, "match_score_reg_t1.pkl"))
-    joblib.dump(reg_t2,   os.path.join(MODELS_DIR, "match_score_reg_t2.pkl"))
+    joblib.dump(scaler, os.path.join(MODELS_DIR, "match_feature_scaler.pkl"))
+    joblib.dump(reg_t1, os.path.join(MODELS_DIR, "match_score_reg_t1.pkl"))
+    joblib.dump(reg_t2, os.path.join(MODELS_DIR, "match_score_reg_t2.pkl"))
 
     meta = {"draw_threshold": draw_thr, "known_teams": list(team_enc.classes_)}
     with open(os.path.join(MODELS_DIR, "match_meta.json"), "w") as f:
@@ -365,10 +365,10 @@ def compile_model() -> None:
 def _load_models():
     global _team_enc, _feature_scaler, _reg_t1, _reg_t2, _meta
     if _team_enc is None:
-        _team_enc       = joblib.load(os.path.join(MODELS_DIR, "match_team_enc.pkl"))
+        _team_enc = joblib.load(os.path.join(MODELS_DIR, "match_team_enc.pkl"))
         _feature_scaler = joblib.load(os.path.join(MODELS_DIR, "match_feature_scaler.pkl"))
-        _reg_t1         = joblib.load(os.path.join(MODELS_DIR, "match_score_reg_t1.pkl"))
-        _reg_t2         = joblib.load(os.path.join(MODELS_DIR, "match_score_reg_t2.pkl"))
+        _reg_t1 = joblib.load(os.path.join(MODELS_DIR, "match_score_reg_t1.pkl"))
+        _reg_t2 = joblib.load(os.path.join(MODELS_DIR, "match_score_reg_t2.pkl"))
         with open(os.path.join(MODELS_DIR, "match_meta.json")) as f:
             _meta = json.load(f)
 
@@ -378,7 +378,7 @@ def _standings_for(team: str, standings: pd.DataFrame) -> dict:
         r = standings.loc[team]
         return {
             "points": float(r["points"]),
-            "gd":     float(r["goal_difference"]),
+            "gd": float(r["goal_difference"]),
             "win_rate": float(r["win_rate"]),
             "goals_for": float(r["goals_for"]),
             "goals_against": float(r["goals_against"]),
@@ -413,8 +413,8 @@ def predict_match(
             raise ValueError(f"Unknown team '{name}' ({role}). Re-train to include it.")
 
     standings = _load_standings()
-    form      = _build_rolling_form(_load_matches())
-    draw_thr  = _meta["draw_threshold"]
+    form = _build_rolling_form(_load_matches())
+    draw_thr = _meta["draw_threshold"]
 
     s1 = _standings_for(team1, standings)
     s2 = _standings_for(team2, standings)
@@ -427,13 +427,13 @@ def predict_match(
         team1_attack, team1_mid, team1_def, team1_overall,
         team2_attack, team2_mid, team2_def, team2_overall,
         team1_attack - team2_attack,
-        team1_mid    - team2_mid,
-        team1_def    - team2_def,
+        team1_mid - team2_mid,
+        team1_def - team2_def,
         team1_overall - team2_overall,
         s1["points"], s1["gd"], s1["win_rate"], s1["goals_for"], s1["goals_against"],
         s2["points"], s2["gd"], s2["win_rate"], s2["goals_for"], s2["goals_against"],
         s1["points"] - s2["points"],
-        s1["gd"]     - s2["gd"],
+        s1["gd"] - s2["gd"],
         f1["scored"], f1["conceded"],
         f2["scored"], f2["conceded"],
     ]], dtype=float)

@@ -5,7 +5,7 @@ from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
 from app.schemas import Team
-from app.api.constants import FORMATIONS
+from app.constants import FORMATIONS
 
 router = APIRouter()
 

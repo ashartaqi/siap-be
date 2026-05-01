@@ -2,15 +2,16 @@
 Pydantic schemas for data validation and serialization.
 Used for request bodies and response models in API routes.
 """
-from typing import Optional, ClassVar, Set,List,Literal
+from typing import Optional, ClassVar, Set, List, Literal
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
-from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX, INITIAL_BB_BALANCE
+from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict
+from app.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX, INITIAL_BB_BALANCE
 
 
 class UserLogin(BaseModel):
     email: str
     password: str
+
 
 class UserRegister(BaseModel):
     username: str
@@ -19,14 +20,13 @@ class UserRegister(BaseModel):
     last_name: str
     password: str
     confirm_password: str
-    
 
     @field_validator("username")
     def username_must_not_have_at(cls, v):
         if "@" in v:
             raise ValueError("Username must not contain '@'")
         return v
-    
+
     @model_validator(mode="after")
     def match_passwords(cls, values):
         if len(values.password) < 7:
@@ -34,10 +34,11 @@ class UserRegister(BaseModel):
         if values.password != values.confirm_password:
             raise ValueError("Passwords don't match")
         return values
-    
+
+
 class RegisteredUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     username: str
     email: EmailStr
     first_name: str
@@ -50,12 +51,11 @@ class AccessToken(BaseModel):
     access_token: str
     token_type: str
 
-class UnlockStatus(BaseModel):
-    is_unlocked: bool
 
 class ShopUnlockResponse(BaseModel):
     message: str
     new_balance: int
+
 
 class BattleUser(BaseModel):
     id: int
@@ -63,34 +63,38 @@ class BattleUser(BaseModel):
     has_team: bool
     has_player: bool
 
+
 class BattleRewardResponse(BaseModel):
     new_balance: int
     reward: int
 
-class PlayerStats(BaseModel):
-    pace: Optional[int]
-    shooting: Optional[int]
-    passing: Optional[int]
-    dribbling: Optional[int]
-    defending: Optional[int]
-    physic: Optional[int]
 
-    class Config:
-        from_attributes = True
+class PlayerStats(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    pace: Optional[int] = None
+    shooting: Optional[int] = None
+    passing: Optional[int] = None
+    dribbling: Optional[int] = None
+    defending: Optional[int] = None
+    physic: Optional[int] = None
+
 
 class GoalkeeperStats(BaseModel):
-    diving: Optional[int]
-    handling: Optional[int]
-    kicking: Optional[int]
-    positioning: Optional[int]
-    reflexes: Optional[int]
-    speed: Optional[int]
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    diving: Optional[int] = None
+    handling: Optional[int] = None
+    kicking: Optional[int] = None
+    positioning: Optional[int] = None
+    reflexes: Optional[int] = None
+    speed: Optional[int] = None
+
 
 class Players(BaseModel):
-    id: Optional[int]
+    model_config = ConfigDict(from_attributes=True)
+
+    id: Optional[int] = None
     short_name: str
     long_name: str
 
@@ -112,15 +116,11 @@ class Players(BaseModel):
     skill_moves: int
     work_rate: Optional[str] = None
 
-    player_stats: Optional[PlayerStats]
-
-    goalkeeper_stats: Optional[GoalkeeperStats]
+    player_stats: Optional[PlayerStats] = None
+    goalkeeper_stats: Optional[GoalkeeperStats] = None
 
     player_face_url: Optional[str] = None
     is_unlocked: bool = False
-
-    class Config:
-        from_attributes = True
 
     @field_validator("positions", mode="before")
     @classmethod
@@ -129,7 +129,10 @@ class Players(BaseModel):
             return [p.position for p in v]
         return v
 
+
 class Team(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     league_name: Optional[str] = None
@@ -141,26 +144,26 @@ class Team(BaseModel):
     home_stadium: Optional[str] = None
     logo_url: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class Votes(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     fixture_id: int
     prediction_away_score: int
     prediction_home_score: int
 
-    class Config:
-        from_attributes = True
 
 class VoteCreate(BaseModel):
     fixture_id: int
     prediction_home_score: int
     prediction_away_score: int
 
+
 class VoteWithUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     username: str
@@ -169,10 +172,10 @@ class VoteWithUser(BaseModel):
     prediction_home_score: int
     prediction_away_score: int
 
-    class Config:
-        from_attributes = True
 
 class Fixtures(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     date: str
     home_team: str
@@ -183,11 +186,10 @@ class Fixtures(BaseModel):
     home_team_score: Optional[str] = None
     winner: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class LeagueStandings(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     position: int
     team_name: str
@@ -203,9 +205,6 @@ class LeagueStandings(BaseModel):
     logo_url: Optional[str] = None
     forms: List[str] = []
 
-    class Config:
-        from_attributes = True
-
     @field_validator("forms", mode="before")
     @classmethod
     def flatten_forms(cls, v):
@@ -216,10 +215,11 @@ class LeagueStandings(BaseModel):
 
 class PlayerBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     VALID_POSITIONS: ClassVar[Set[str]] = {pos for group in VALID_PLAYER_POSITIONS.values() for pos in group}
     VALID_FEET: ClassVar[Set[str]] = set(VALID_PREFERRED_FEET)
 
-    @field_validator("name" ,check_fields=False)
+    @field_validator("name", check_fields=False)
     @classmethod
     def name_not_empty(cls, v):
         if v is None:
@@ -231,7 +231,7 @@ class PlayerBase(BaseModel):
             raise ValueError("Name too long")
         return v
 
-    @field_validator("position",check_fields=False)
+    @field_validator("position", check_fields=False)
     @classmethod
     def valid_position(cls, v):
         if v is None:
@@ -241,7 +241,7 @@ class PlayerBase(BaseModel):
             raise ValueError(f"Position must be one of {cls.VALID_POSITIONS}")
         return v
 
-    @field_validator("preferred_foot",check_fields=False)
+    @field_validator("preferred_foot", check_fields=False)
     @classmethod
     def valid_foot(cls, v):
         if v is None:
@@ -251,7 +251,7 @@ class PlayerBase(BaseModel):
             raise ValueError("Preferred foot must be 'Left' or 'Right'")
         return v
 
-    @field_validator("pace", "shooting", "passing", "dribbling", "defending", "physic",check_fields=False)
+    @field_validator("pace", "shooting", "passing", "dribbling", "defending", "physic", check_fields=False)
     @classmethod
     def stat_range(cls, v):
         if v is None:
@@ -270,8 +270,6 @@ class PlayerBase(BaseModel):
             getattr(self, "defending", None),
             getattr(self, "physic", None),
         ]
-
-        # Only validate if all stats are present (important for UPDATE)
         if all(v is not None for v in stats):
             total = sum(stats)
             if total > PLAYER_TOTAL_STATS_MAX:
@@ -304,6 +302,7 @@ class CustomPlayerUpdate(PlayerBase):
     defending: Optional[int] = None
     physic: Optional[int] = None
 
+
 class CustomPlayerGet(CustomPlayerCreate):
     position: str
     overall: int
@@ -312,44 +311,63 @@ class CustomPlayerGet(CustomPlayerCreate):
 class FormationBase(BaseModel):
     formation: Literal["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"]
 
+
 class DreamTeamSlotCreate(BaseModel):
     position: str
     player_id: int
     row: Optional[int] = None
     col: Optional[int] = None
-    
+
+
 class DreamTeamCreate(FormationBase):
     slots: List[DreamTeamSlotCreate]
 
+
 class DreamTeamSlotGet(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    position: str        
-    row: Optional[int] = None   
-    col: Optional[int] = None   
+    position: str
+    row: Optional[int] = None
+    col: Optional[int] = None
     player_id: int
     player: Optional[Players] = None
 
-    class Config:
-        from_attributes = True
 
 class DreamTeamSlotUpdate(BaseModel):
     player_id: int
 
+
 class DreamTeamGet(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     formation: str
     slots: List[DreamTeamSlotGet]
     total_score: int
-
-    class Config:
-        from_attributes = True
 
 
 class ChatMessageCreate(BaseModel):
     content: str
 
 
-class MatchComment(BaseModel):
+class ChatMessageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    username: str
+    content: str
+    created_at: datetime
+
+
+class MatchCommentCreate(BaseModel):
+    content: str
+
+
+class MatchCommentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     match_id: int
@@ -357,22 +375,6 @@ class MatchComment(BaseModel):
     content: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
-class MatchCommentCreate(BaseModel):
-    content: str
-
-class ChatMessage(BaseModel):
-    id: int
-    user_id: int
-    username: str
-    content: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class MatchSimulationStats(BaseModel):
     shots1: int
@@ -381,6 +383,7 @@ class MatchSimulationStats(BaseModel):
     xg2: float
     possession1: int
     possession2: int
+
 
 class MatchSimulationResult(BaseModel):
     score1: int
