@@ -1,4 +1,4 @@
-from app.api.constants import TEAM_TOTAL_OVERALL_MAX, VALID_PLAYER_POSITIONS
+from app.constants import TEAM_TOTAL_OVERALL_MAX, VALID_PLAYER_POSITIONS, FORMATIONS
 from app.crud import get_players
 from app.core.db import engine
 from sqlalchemy.orm import Session
@@ -149,6 +149,55 @@ def mutate(team: list, config: dict) -> list:
         mutated.append(new_group)
 
     return mutated
+
+def build_suggestion_response(formation: str, team: list) -> dict:
+    formation_data = next((f for f in FORMATIONS if f["id"] == formation), None)
+    if not formation_data:
+        raise ValueError(f"Invalid formation: {formation}")
+
+    rows = formation_data["rows"]
+    outfield_players = []
+    for group in reversed(team[1:]):
+        outfield_players.extend(group)
+
+    slots = []
+    slot_id = 1
+    total_overall = 0
+    player_index = 0
+
+    for row_index, row_positions in enumerate(rows):
+        for col, position in enumerate(row_positions):
+            player = outfield_players[player_index]
+            slots.append({
+                "id": slot_id,
+                "position": position,
+                "row": row_index,
+                "col": col,
+                "player_id": player.id,
+                "player": player,
+            })
+            total_overall += player.overall
+            slot_id += 1
+            player_index += 1
+
+    gk = team[0][0]
+    slots.append({
+        "id": slot_id,
+        "position": "GK",
+        "row": None,
+        "col": None,
+        "player_id": gk.id,
+        "player": gk,
+    })
+    total_overall += gk.overall
+
+    return {
+        "id": 1,
+        "formation": formation,
+        "slots": slots,
+        "total_score": total_overall // 11,
+    }
+
 
 #main
 def suggestion(formation: str) -> list:

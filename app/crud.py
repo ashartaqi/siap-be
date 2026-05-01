@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
 from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage, MatchComment, UnlockedPlayer
-from app.api.constants import (
+from app.constants import (
     TEAM_TOTAL_OVERALL_MAX, 
     CHAT_REWARD,
     SHOP_PRICE_70_80,
@@ -74,14 +74,13 @@ def add_bb_reward(db: Session, user_id: int, amount: int):
 
 def check_and_award_daily_login_reward(db: Session, user: User):
     try:
-        today = datetime.now(timezone.utc).date()
-        last_reward = user.last_login_reward_at
-        if not last_reward or last_reward.date() < today:
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+        already_rewarded = db.query(RefreshToken).filter(
+            RefreshToken.user_id == user.id,
+            RefreshToken.created_at >= today_start,
+        ).first()
+        if not already_rewarded:
             user.bb_balance = (user.bb_balance or 0) + DAILY_LOGIN_REWARD
-            user.last_login_reward_at = datetime.now(timezone.utc)
-            # We don't commit yet if called during login which has its own commit later, 
-            # but for safety let's flush or commit if needed.
-            # In this app, login route calls create_refresh_token which commits.
             db.flush()
     except Exception as e:
         print(f"Daily reward error: {e}")
@@ -162,16 +161,16 @@ def get_teams(
     return query.order_by(desc(Club.overall)).offset(skip).limit(limit).all()
 
 
-def add_fav_team(db, user, team):
+def add_fav_team(db: Session, user: int, team: int):
     fav_team = FavouriteClubs(user_id=user, club_id=team)
     return create(db, fav_team, "Favourite either exists or there was a error")
 
 
-def get_fav_teams(db, user):
+def get_fav_teams(db: Session, user: int):
     return db.query(Club).join(FavouriteClubs, FavouriteClubs.club_id == Club.id).filter(FavouriteClubs.user_id == user).all()
 
 
-def remove_fav_team(db, user, team):
+def remove_fav_team(db: Session, user: int, team: int):
     deleted = db.query(FavouriteClubs).filter(
         FavouriteClubs.user_id == user,
         FavouriteClubs.club_id == team
@@ -290,12 +289,12 @@ def get_players(
     return players
 
 
-def add_fav_player(db, user, player):
+def add_fav_player(db: Session, user: int, player: int):
     fav_player = FavouritePlayers(user_id=user, player_id=player)
     return create(db, fav_player, "Favourite either exists or there was a error")
 
 
-def get_fav_players(db, user):
+def get_fav_players(db: Session, user: int):
     return (
         db.query(Player)
         .join(FavouritePlayers, FavouritePlayers.player_id == Player.id)
@@ -309,7 +308,7 @@ def get_fav_players(db, user):
     )
 
 
-def remove_fav_player(db, user, player):
+def remove_fav_player(db: Session, user: int, player: int):
     deleted = db.query(FavouritePlayers).filter(
         FavouritePlayers.user_id == user,
         FavouritePlayers.player_id == player
@@ -426,9 +425,9 @@ def create_vote(
     prediction_home_score: int,
     prediction_away_score: int,
 ):
-    """Cast a vote — deletes any existing vote by this user first (one vote at a time)."""
-    db.query(Votes).filter(Votes.user_id == user_id).delete(synchronize_session=False)
-    db.flush()
+    existing = db.query(Votes).filter(Votes.user_id == user_id, Votes.fixture_id == fixture_id).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vote already exists for this fixture")
 
     vote = Votes(
         user_id=user_id,
@@ -438,10 +437,6 @@ def create_vote(
     )
     return create(db, vote, "Error creating vote")
 
-
-def get_user_active_vote(db: Session, user_id: int):
-    """Return the single active vote for a user (if any)."""
-    return db.query(Votes).filter(Votes.user_id == user_id).first()
 
 
 def get_user_votes(db: Session, user_id: int):
@@ -455,10 +450,10 @@ def update_vote(
     prediction_home_score: int,
     prediction_away_score: int,
 ):
-    """Update the prediction on the user's current vote, or move it to a new fixture."""
-    vote = db.query(Votes).filter(Votes.user_id == user_id).first()
+    """Update the prediction on the user's vote for a specific fixture."""
+    vote = db.query(Votes).filter(Votes.user_id == user_id, Votes.fixture_id == fixture_id).first()
     if not vote:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active vote found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No vote found for this fixture")
     
     vote.fixture_id = fixture_id
     vote.prediction_home_score = prediction_home_score
@@ -485,10 +480,6 @@ def delete_vote(db: Session, user_id: int, vote_id: int = None):
 
 
 # CUSTOM PLAYERS
-def get_custom_players(db: Session, user_id: int):
-    return db.query(CustomPlayer).filter().all()
-
-
 def get_custom_player(db: Session, user_id: int):
     return db.query(CustomPlayer).filter(CustomPlayer.user_id == user_id).first()
 
@@ -528,7 +519,28 @@ def delete_custom_player(db: Session, user_id: int):
         return True
     return False
 
-#DREAM TEAM
+# DREAM TEAM
+def _validate_dream_team_slots(db: Session, slots: list) -> int:
+    if len(slots) != 11:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 11 slots must be provided")
+
+    player_ids = [slot.player_id for slot in slots]
+    players_by_id = {p.id: p for p in db.query(Player).filter(Player.id.in_(player_ids)).all()}
+
+    missing = [pid for pid in player_ids if pid not in players_by_id]
+    if missing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Players not found: {missing}")
+
+    total_score = sum(players_by_id[slot.player_id].overall for slot in slots)
+    if total_score > TEAM_TOTAL_OVERALL_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Total overall cannot exceed {TEAM_TOTAL_OVERALL_MAX}. You used {total_score}."
+        )
+
+    return total_score
+
+
 def get_dream_team(db: Session, user_id: int):
     return db.query(DreamTeam)\
              .filter(DreamTeam.user_id == user_id)\
@@ -580,59 +592,39 @@ def update_dream_team_slot(db: Session, user_id: int, slot_id: int, player_id: i
 
 # CHAT
 def get_chat_messages(db: Session, limit: int = 50):
-    rows = db.query(
-        ChatMessage.id,
-        ChatMessage.user_id,
-        User.username,
-        ChatMessage.content,
-        ChatMessage.created_at
-    ).join(User, User.id == ChatMessage.user_id).order_by(desc(ChatMessage.created_at)).limit(limit).all()
-    
-    return [
-        {
-            "id": r.id,
-            "user_id": r.user_id,
-            "username": r.username,
-            "content": r.content,
-            "created_at": r.created_at
-        }
-        for r in reversed(rows)
-    ]
+    messages = (
+        db.query(ChatMessage)
+        .options(joinedload(ChatMessage.user))
+        .order_by(desc(ChatMessage.created_at))
+        .limit(limit)
+        .all()
+    )
+    return list(reversed(messages))
 
 def create_chat_message(db: Session, user_id: int, content: str):
-    message = ChatMessage(user_id=user_id, content=content)
-    
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     user = db.query(User).filter(User.id == user_id).first()
     if user:
-        today = datetime.now(timezone.utc).date()
-        if not user.last_chat_reward_at or user.last_chat_reward_at.date() < today:
+        first_today = not db.query(ChatMessage).filter(
+            ChatMessage.user_id == user_id,
+            ChatMessage.created_at >= today_start,
+        ).first()
+        if first_today:
             user.bb_balance += CHAT_REWARD
-            user.last_chat_reward_at = datetime.now(timezone.utc)
-            db.commit()
-            
+            db.flush()
+
+    message = ChatMessage(user_id=user_id, content=content)
     return create(db, message, "Error sending message")
 
 # MATCH COMMENTS
 def get_match_comments(db: Session, match_id: int):
-    rows = db.query(
-        MatchComment.id,
-        MatchComment.user_id,
-        MatchComment.match_id,
-        User.username,
-        MatchComment.content,
-        MatchComment.created_at
-    ).join(User, MatchComment.user_id == User.id).filter(MatchComment.match_id == match_id).order_by(MatchComment.created_at.desc()).all()
-    
-    return [
-        {
-            "id": r.id,
-            "user_id": r.user_id,
-            "match_id": r.match_id,
-            "username": r.username,
-            "content": r.content,
-            "created_at": r.created_at
-        } for r in rows
-    ]
+    return (
+        db.query(MatchComment)
+        .options(joinedload(MatchComment.user))
+        .filter(MatchComment.match_id == match_id)
+        .order_by(MatchComment.created_at.desc())
+        .all()
+    )
 
 def create_match_comment(db: Session, user_id: int, match_id: int, content: str):
     comment = MatchComment(user_id=user_id, match_id=match_id, content=content)
@@ -648,39 +640,19 @@ def create_match_comment(db: Session, user_id: int, match_id: int, content: str)
 
 
 def create_dream_team(db: Session, user_id: int, formation: str, slots: list):
+    total_score = _validate_dream_team_slots(db, slots)
 
-    if len(slots) != 11:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 11 slots must be provided")
+    team = DreamTeam(user_id=user_id, formation=formation, total_score=total_score // 11)
+    create(db, team)
 
-    total_score = 0
     for slot in slots:
-        player = db.query(Player).filter(Player.id == slot.player_id).first()
-        if not player:
-            raise HTTPException(status_code=404, detail=f"Player {slot.player_id} not found")
-        total_score += player.overall
-
-    if total_score > TEAM_TOTAL_OVERALL_MAX:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Total overall cannot exceed {TEAM_TOTAL_OVERALL_MAX}. You used {total_score}.")
-
-    team=DreamTeam(user_id = user_id,formation=formation,total_score =(total_score)//11)
-    create(db,team)
-
-     
-
-    
-    for slot in slots:
-        player = db.query(Player).filter(Player.id == slot.player_id).first()
-        if not player:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player with id {slot.player_id} not found")
-        
-        slot_row = DreamTeamSlot(
+        create(db, DreamTeamSlot(
             dream_team_id=team.id,
             position=slot.position,
             row=slot.row,
             col=slot.col,
             player_id=slot.player_id
-        )
-        create(db, slot_row)
+        ))
 
     return team
 
@@ -690,36 +662,22 @@ def update_dream_team(db: Session, user_id: int, formation: str, slots: list):
     if not team:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No dream team found")
 
-    if len(slots) != 11:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly 11 slots must be provided")
+    total_score = _validate_dream_team_slots(db, slots)
 
-    total_score = 0
-    for slot in slots:
-        player = db.query(Player).filter(Player.id == slot.player_id).first()
-        if not player:
-            raise HTTPException(status_code=404, detail=f"Player {slot.player_id} not found")
-        total_score += player.overall
-
-    if total_score > TEAM_TOTAL_OVERALL_MAX:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Total overall cannot exceed {TEAM_TOTAL_OVERALL_MAX}. You used {total_score}.")
-
-    # Update team fields
     team.formation = formation
     team.total_score = total_score // 11
 
-    # Delete old slots and create new ones
     db.query(DreamTeamSlot).filter(DreamTeamSlot.dream_team_id == team.id).delete()
     db.flush()
 
     for slot in slots:
-        slot_row = DreamTeamSlot(
+        db.add(DreamTeamSlot(
             dream_team_id=team.id,
             position=slot.position,
             row=slot.row,
             col=slot.col,
             player_id=slot.player_id
-        )
-        db.add(slot_row)
+        ))
 
     db.commit()
     db.refresh(team)
@@ -737,32 +695,28 @@ def get_unlock_price(overall: int) -> int:
         return SHOP_PRICE_85_90
     return SHOP_PRICE_90_PLUS
 
-def unlock_player_in_db(db: Session, current_user: User, player_id: int):
-    # Check if already unlocked
+def unlock_player(db: Session, user_id: int, player_id: int):
     existing = db.query(UnlockedPlayer).filter(
-        UnlockedPlayer.user_id == current_user.id,
-        UnlockedPlayer.player_id == player_id
+        UnlockedPlayer.user_id == user_id,
+        UnlockedPlayer.player_id == player_id,
     ).first()
-    
     if existing:
         raise HTTPException(status_code=400, detail="Player already unlocked")
-        
+
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
-        
+
+    user = db.query(User).filter(User.id == user_id).first()
     price = get_unlock_price(player.overall)
-    
-    if current_user.bb_balance < price:
+    if user.bb_balance < price:
         raise HTTPException(status_code=400, detail=f"Insufficient BB balance. Need {price} BB.")
-        
-    # Deduct and unlock
-    current_user.bb_balance -= price
-    unlock_entry = UnlockedPlayer(user_id=current_user.id, player_id=player_id)
-    db.add(unlock_entry)
+
+    user.bb_balance -= price
+    db.add(UnlockedPlayer(user_id=user_id, player_id=player_id))
     db.commit()
-    
-    return {"message": f"Successfully unlocked {player.short_name}", "new_balance": current_user.bb_balance}
+
+    return {"message": f"Successfully unlocked {player.short_name}", "new_balance": user.bb_balance}
 
 def get_battle_users_from_db(db: Session, current_user_id: int):
     # Fetch all user_ids who have either a dream team or a custom player

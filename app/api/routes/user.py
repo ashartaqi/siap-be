@@ -29,7 +29,6 @@ router = APIRouter()
 @router.post("/register", response_model=RegisteredUser)
 def register(user: UserRegister, db: Session = Depends(get_db)):
     try:
-
         db_user = create_user(db, username=user.username, email=user.email, password=user.password, first_name=user.first_name, last_name=user.last_name)
         if not db_user:
             raise HTTPException(status_code=400, detail="User registration failed")
@@ -59,7 +58,7 @@ def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
 
         access_token = create_access_token({"sub": db_user.email})
         refresh_token = generate_refresh_token()
-        create_refresh_token(db, db_user.id, refresh_token) # This commits the balance change too!
+        create_refresh_token(db, db_user.id, refresh_token)
         set_refresh_cookie(response, refresh_token)
             
         return {"access_token": access_token, "token_type": "bearer"}
