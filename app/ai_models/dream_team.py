@@ -17,21 +17,6 @@ attacker_pool   = get_players(db, limit=150, position=positions["attacking"])
 db.close()
 
 def parse_formation(formation: str) -> dict:
-    """
-    Parse a formation string into a role-count dict.
-
-    Supported formats:
-        "4-3-3"     -> {def: 4, mid: [3], att: 3}
-        "4-2-3-1"   -> {def: 4, mid: [2, 3], att: 1}
-        "3-5-2"     -> {def: 3, mid: [5], att: 2}
-
-    Returns:
-        {
-            "num_def": int,
-            "mid_groups": [int, ...],   # one entry per midfield band
-            "num_att": int,
-        }
-    """
     parts = list(map(int, formation.split("-")))
     if len(parts) < 3:
         raise ValueError(f"Formation '{formation}' must have at least 3 numbers (DEF-MID-ATT).")
@@ -46,7 +31,6 @@ def _team_size(config: dict) -> int:
     return 1 + config["num_def"] + sum(config["mid_groups"]) + config["num_att"]
 
 def _group_roles(config: dict) -> list[str]:
-    """Return a label per group (for debug printing)."""
     roles = ["GK", "DEF"]
     for i, n in enumerate(config["mid_groups"]):
         roles.append(f"MID{i+1}" if len(config["mid_groups"]) > 1 else "MID")

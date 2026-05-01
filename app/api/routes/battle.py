@@ -1,3 +1,4 @@
+import random
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app import crud
@@ -50,8 +51,8 @@ def get_user_custom_player(user_id: int, db: Session = Depends(get_db), current_
     return player
 
 
-@router.post("/simulate/{opponent_id}", response_model=MatchSimulationResult)
-def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.post("/team/simulate/{opponent_id}", response_model=MatchSimulationResult)
+def simulate_team_battle(opponent_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     my_team = crud.get_dream_team(db, current_user.id)
     if not my_team:
         raise HTTPException(status_code=400, detail="You do not have a Dream Team")
@@ -100,3 +101,100 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
     )
 
     return match_result
+
+@router.post("/player/simulate/{opponent_id}", response_model=MatchSimulationResult)
+def simulate_player_battle(
+    opponent_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    my_team = crud.get_dream_team(db, current_user.id)
+    if not my_team:
+        raise HTTPException(status_code=400, detail="You do not have a Dream Team")
+
+    opp_team = crud.get_dream_team(db, opponent_id)
+    if not opp_team:
+        raise HTTPException(status_code=400, detail="Opponent does not have a Dream Team")
+
+    opp_user = crud.get_user_by_id(db, opponent_id)
+    opp_name = opp_user.username if opp_user else f"User {opponent_id}"
+
+    def to_player_dict(team) -> dict:
+        slots = team.slots
+        all_players = [s.player for s in slots if s.player]
+        def avg(attr):
+            vals = [getattr(p, attr, 0) for p in all_players]
+            return sum(vals) / len(vals) if vals else 50
+        return {
+            "shooting":  avg("shooting"),
+            "pace":      avg("pace"),
+            "dribbling": avg("dribbling"),
+            "defending": avg("defending"),
+            "physical":  avg("physic"),
+            "overall":   avg("overall"),
+            "position":  slots[0].position if slots else "CM",
+        }
+
+    def attack_score(p):
+        return 0.30 * p["shooting"] + 0.25 * p["pace"] + 0.25 * p["dribbling"] + 0.20 * p["overall"]
+
+    def defense_score(p):
+        return 0.40 * p["defending"] + 0.30 * p["physical"] + 0.30 * p["overall"]
+
+    def position_bonus(p):
+        pos = p["position"]
+        if pos in ["ST", "CF", "LW", "RW"]:
+            return {"attack": 1.1, "defense": 0.9}
+        elif pos in ["CM", "CAM", "CDM"]:
+            return {"attack": 1.0, "defense": 1.0}
+        elif pos in ["CB", "LB", "RB"]:
+            return {"attack": 0.85, "defense": 1.15}
+        elif pos == "GK":
+            return {"attack": 0.3, "defense": 1.5}
+        else:
+            return {"attack": 1.0, "defense": 1.0}
+
+    p1 = to_player_dict(my_team)
+    p2 = to_player_dict(opp_team)
+
+    b1, b2 = position_bonus(p1), position_bonus(p2)
+    p1_attack = attack_score(p1) * b1["attack"]
+    p1_def    = defense_score(p1) * b1["defense"]
+    p2_attack = attack_score(p2) * b2["attack"]
+    p2_def    = defense_score(p2) * b2["defense"]
+
+    score1, score2, log = 0, 0, []
+    for minute in range(10):
+        if p1_attack * random.uniform(0.8, 1.2) > p2_def * random.uniform(0.8, 1.2):
+            score1 += 1
+            log.append(f"{current_user.username} scores at chance {minute + 1}")
+        if p2_attack * random.uniform(0.8, 1.2) > p1_def * random.uniform(0.8, 1.2):
+            score2 += 1
+            log.append(f"{opp_name} scores at chance {minute + 1}")
+
+    if score1 > score2:
+        winner, reward = "me", BATTLE_PARTICIPATION_REWARD + BATTLE_WIN_REWARD
+    elif score2 > score1:
+        winner, reward = "opponent", BATTLE_PARTICIPATION_REWARD
+    else:
+        winner, reward = "draw", BATTLE_PARTICIPATION_REWARD + BATTLE_DRAW_REWARD
+
+    updated_user = crud.add_bb_reward(db, current_user.id, reward)
+
+    total_goals = max(score1 + score2, 1)
+    return MatchSimulationResult(
+        score1=score1,
+        score2=score2,
+        stats={
+            "shots1": 10,
+            "shots2": 10,
+            "xg1": round(p1_attack / (p1_attack + p2_attack) * total_goals, 2),
+            "xg2": round(p2_attack / (p1_attack + p2_attack) * total_goals, 2),
+            "possession1": int(p1_attack / (p1_attack + p2_attack) * 100),
+            "possession2": int(p2_attack / (p1_attack + p2_attack) * 100),
+        },
+        log=log,
+        winner=winner,
+        reward=reward,
+        new_balance=updated_user.bb_balance,
+    )
