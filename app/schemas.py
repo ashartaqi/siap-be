@@ -364,6 +364,19 @@ class ChatMessage(BaseModel):
     class Config:
         from_attributes = True
 
+class MatchSimulationStats(BaseModel):
+    shots1: int
+    shots2: int
+    xg1: float
+    xg2: float
+    possession1: int
+    possession2: int
 
-
-    
+class MatchSimulationResult(BaseModel):
+    score1: int
+    score2: int
+    stats: MatchSimulationStats
+    log: List[str]
+    winner: Literal["me", "opponent", "draw"]
+    reward: int
+    new_balance: int
