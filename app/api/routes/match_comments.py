@@ -20,15 +20,13 @@ def get_match_comments(match_id: int, db: Session = Depends(get_db), current_use
 def post_match_comment(match_id: int, payload: MatchCommentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         comment = crud.create_match_comment(db, user_id=current_user.id, match_id=match_id, content=payload.content)
-        return {
-            "id": comment.id,
-            "user_id": comment.user_id,
-            "match_id": comment.match_id,
-            "username": current_user.username,
-            "content": comment.content,
-            "created_at": comment.created_at
-        }
+        return MatchComment(
+            id=comment.id,
+            user_id=comment.user_id,
+            match_id=comment.match_id,
+            username=current_user.username,
+            content=comment.content,
+            created_at=comment.created_at
+        )
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

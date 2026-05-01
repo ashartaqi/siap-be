@@ -20,14 +20,12 @@ def get_chat_messages(db: Session = Depends(get_db), current_user: User = Depend
 def send_chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         message = crud.create_chat_message(db, user_id=current_user.id, content=payload.content)
-        return {
-            "id": message.id,
-            "user_id": message.user_id,
-            "username": current_user.username,
-            "content": message.content,
-            "created_at": message.created_at
-        }
+        return ChatMessage(
+            id=message.id,
+            user_id=message.user_id,
+            username=current_user.username,
+            content=message.content,
+            created_at=message.created_at
+        )
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

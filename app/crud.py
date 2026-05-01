@@ -6,7 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
 from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage, MatchComment, UnlockedPlayer
-from app.api.constants import TEAM_TOTAL_OVERALL_MAX
+from app.api.constants import (
+    TEAM_TOTAL_OVERALL_MAX, 
+    CHAT_REWARD,
+    SHOP_PRICE_70_80,
+    SHOP_PRICE_80_85,
+    SHOP_PRICE_85_90,
+    SHOP_PRICE_90_PLUS,
+    DAILY_LOGIN_REWARD,
+    INITIAL_BB_BALANCE
+)
 from app.ai_models.dream_player import predict_player
 
 
@@ -31,7 +40,7 @@ def create_user(db: Session, username: str, email: str, first_name: str, last_na
         last_name=last_name, 
         password=hashed_pw, 
         super_user=super_user,
-        bb_balance=100 # Initial gift
+        bb_balance=INITIAL_BB_BALANCE # Initial gift
     )
     return create(db, user, "Username or email already exists")
 
@@ -62,6 +71,20 @@ def add_bb_reward(db: Session, user_id: int, amount: int):
         user.bb_balance += amount
         db.commit()
     return user
+
+def check_and_award_daily_login_reward(db: Session, user: User):
+    try:
+        today = datetime.now(timezone.utc).date()
+        last_reward = user.last_login_reward_at
+        if not last_reward or last_reward.date() < today:
+            user.bb_balance = (user.bb_balance or 0) + DAILY_LOGIN_REWARD
+            user.last_login_reward_at = datetime.now(timezone.utc)
+            # We don't commit yet if called during login which has its own commit later, 
+            # but for safety let's flush or commit if needed.
+            # In this app, login route calls create_refresh_token which commits.
+            db.flush()
+    except Exception as e:
+        print(f"Daily reward error: {e}")
 
 def rotate_refresh_token(db: Session, old_token_id: int, user_id: int, new_plain_token: str) -> RefreshToken:
     """Delete the old token and issue a new one atomically."""
@@ -583,7 +606,7 @@ def create_chat_message(db: Session, user_id: int, content: str):
     if user:
         today = datetime.now(timezone.utc).date()
         if not user.last_chat_reward_at or user.last_chat_reward_at.date() < today:
-            user.bb_balance += 20
+            user.bb_balance += CHAT_REWARD
             user.last_chat_reward_at = datetime.now(timezone.utc)
             db.commit()
             
@@ -707,12 +730,12 @@ def get_unlock_price(overall: int) -> int:
     if overall < 70:
         return 0
     if 70 <= overall < 80:
-        return 30
+        return SHOP_PRICE_70_80
     if 80 <= overall < 85:
-        return 40
+        return SHOP_PRICE_80_85
     if 85 <= overall < 90:
-        return 50
-    return 100
+        return SHOP_PRICE_85_90
+    return SHOP_PRICE_90_PLUS
 
 def unlock_player_in_db(db: Session, current_user: User, player_id: int):
     # Check if already unlocked
@@ -740,3 +763,18 @@ def unlock_player_in_db(db: Session, current_user: User, player_id: int):
     db.commit()
     
     return {"message": f"Successfully unlocked {player.short_name}", "new_balance": current_user.bb_balance}
+
+def get_battle_users_from_db(db: Session, current_user_id: int):
+    # Fetch all user_ids who have either a dream team or a custom player
+    users_with_teams = {u[0] for u in db.query(DreamTeam.user_id).all()}
+    users_with_players = {u[0] for u in db.query(CustomPlayer.user_id).all()}
+    
+    user_ids = users_with_teams.union(users_with_players)
+    if current_user_id in user_ids:
+        user_ids.remove(current_user_id)
+        
+    if not user_ids:
+        return [], set(), set()
+        
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    return users, users_with_teams, users_with_players

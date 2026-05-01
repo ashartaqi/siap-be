@@ -1,36 +1,36 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from app import crud
 from app.api.deps import get_db
-from app.models import User, DreamTeam, CustomPlayer
+from app.models import User, DreamTeam
 from app.core.security import get_current_user
-from app.schemas import DreamTeamGet as DreamTeamSchema, CustomPlayerGet as CustomPlayerSchema, MatchSimulationResult
+from app.schemas import (
+    DreamTeamGet as DreamTeamSchema, 
+    CustomPlayerGet as CustomPlayerSchema, 
+    MatchSimulationResult,
+    BattleUser,
+    BattleRewardResponse
+)
+from app.api.constants import (
+    BATTLE_PARTICIPATION_REWARD,
+    BATTLE_WIN_REWARD,
+    BATTLE_DRAW_REWARD
+)
+from app.core.engine import FootballEngine, EngineTeam, EnginePlayer
 
 router = APIRouter()
 
-@router.get("/users")
+@router.get("/users", response_model=list[BattleUser])
 def get_battle_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Fetch all user_ids who have either a dream team or a custom player
-    users_with_teams = {u[0] for u in db.query(DreamTeam.user_id).all()}
-    users_with_players = {u[0] for u in db.query(CustomPlayer.user_id).all()}
-    
-    user_ids = users_with_teams.union(users_with_players)
-    if current_user.id in user_ids:
-        user_ids.remove(current_user.id)
-        
-    if not user_ids:
-        return []
-        
-    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    users, users_with_teams, users_with_players = crud.get_battle_users_from_db(db, current_user.id)
     
     return [
-        {
-            "id": u.id,
-            "username": u.username,
-            "has_team": u.id in users_with_teams,
-            "has_player": u.id in users_with_players
-        }
+        BattleUser(
+            id=u.id,
+            username=u.username,
+            has_team=u.id in users_with_teams,
+            has_player=u.id in users_with_players
+        )
         for u in users
     ]
 
@@ -48,20 +48,17 @@ def get_user_custom_player(user_id: int, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=404, detail=f"Custom player not found for user_id {user_id}")
     return player
 
-@router.post("/reward")
+@router.post("/reward", response_model=BattleRewardResponse)
 def award_battle_reward(result: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # result: 'win', 'loss', 'draw'
-    reward = 10 # Participation
+    reward = BATTLE_PARTICIPATION_REWARD
     if result == 'win':
-        reward += 40
+        reward += BATTLE_WIN_REWARD
     elif result == 'draw':
-        reward += 10 
+        reward += BATTLE_DRAW_REWARD 
         
-    current_user.bb_balance += reward
-    db.commit()
-    return {"new_balance": current_user.bb_balance, "reward": reward}
-
-from app.core.engine import FootballEngine, EngineTeam, EnginePlayer
+    updated_user = crud.add_bb_reward(db, current_user.id, reward)
+    return BattleRewardResponse(new_balance=updated_user.bb_balance, reward=reward)
 
 def _map_team_to_engine(team: DreamTeam, team_name: str) -> EngineTeam:
     engine_players = []
@@ -116,30 +113,29 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
 
     engine_me = _map_team_to_engine(my_team, current_user.username)
     
-    opp_user = db.query(User).filter(User.id == opponent_id).first()
+    opp_user = crud.get_user_by_id(db, opponent_id)
     opp_name = opp_user.username if opp_user else f"User {opponent_id}"
     engine_opp = _map_team_to_engine(opp_team, opp_name)
 
     engine = FootballEngine(engine_me, engine_opp)
     result = engine.simulate()
 
-    reward = 10 # Participation
+    reward = BATTLE_PARTICIPATION_REWARD
     winner = "draw"
     if result.score1 > result.score2:
-        reward += 40
+        reward += BATTLE_WIN_REWARD
         winner = "me"
     elif result.score2 > result.score1:
         winner = "opponent"
     else:
-        reward += 10
+        reward += BATTLE_DRAW_REWARD
 
-    current_user.bb_balance += reward
-    db.commit()
+    updated_user = crud.add_bb_reward(db, current_user.id, reward)
 
-    return {
-        "score1": result.score1,
-        "score2": result.score2,
-        "stats": {
+    return MatchSimulationResult(
+        score1=result.score1,
+        score2=result.score2,
+        stats={
             "shots1": result.stats.shots1,
             "shots2": result.stats.shots2,
             "xg1": result.stats.xg1,
@@ -147,8 +143,9 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
             "possession1": int((result.stats.possession1 / max(1, result.stats.possession1 + result.stats.possession2)) * 100),
             "possession2": int((result.stats.possession2 / max(1, result.stats.possession1 + result.stats.possession2)) * 100),
         },
-        "log": result.log,
-        "winner": winner,
-        "reward": reward,
-        "new_balance": current_user.bb_balance
-    }
+        log=result.log,
+        winner=winner,
+        reward=reward,
+        new_balance=updated_user.bb_balance
+    )
+

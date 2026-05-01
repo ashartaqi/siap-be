@@ -57,6 +57,16 @@ class ShopUnlockResponse(BaseModel):
     message: str
     new_balance: int
 
+class BattleUser(BaseModel):
+    id: int
+    username: str
+    has_team: bool
+    has_player: bool
+
+class BattleRewardResponse(BaseModel):
+    new_balance: int
+    reward: int
+
 class PlayerStats(BaseModel):
     pace: Optional[int]
     shooting: Optional[int]
