@@ -178,6 +178,7 @@ def get_players(
     dribbling: int = None,
     defending: int = None,
     physic: int = None,
+    unlock_status: str = None,
 ):
     query = db.query(Player)
     if team_id:
@@ -251,7 +252,13 @@ def get_players(
     unlocked_ids = set()
     if user_id:
         unlocked_ids = {u[0] for u in db.query(UnlockedPlayer.player_id).filter(UnlockedPlayer.user_id == user_id).all()}
-    
+
+    if unlock_status and unlock_status != "all" and user_id:
+        if unlock_status == "unlocked":
+            query = query.filter((Player.id.in_(unlocked_ids)) | (Player.overall < 70))
+        elif unlock_status == "locked":
+            query = query.filter((Player.overall >= 70) & (~Player.id.in_(unlocked_ids)))
+
     players = query.offset(skip).limit(limit).all()
     
     for p in players:
