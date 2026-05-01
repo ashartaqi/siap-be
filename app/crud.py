@@ -598,7 +598,7 @@ def get_match_comments(db: Session, match_id: int):
         User.username,
         MatchComment.content,
         MatchComment.created_at
-    ).join(User, User.id == MatchComment.user_id).filter(MatchComment.match_id == match_id).order_by(desc(MatchComment.created_at)).all()
+    ).join(User, MatchComment.user_id == User.id).filter(MatchComment.match_id == match_id).order_by(MatchComment.created_at.desc()).all()
     
     return [
         {
@@ -608,8 +608,7 @@ def get_match_comments(db: Session, match_id: int):
             "username": r.username,
             "content": r.content,
             "created_at": r.created_at
-        }
-        for r in reversed(rows)
+        } for r in rows
     ]
 
 def create_match_comment(db: Session, user_id: int, match_id: int, content: str):
@@ -702,3 +701,42 @@ def update_dream_team(db: Session, user_id: int, formation: str, slots: list):
     db.commit()
     db.refresh(team)
     return team
+
+# SHOP
+def get_unlock_price(overall: int) -> int:
+    if overall < 70:
+        return 0
+    if 70 <= overall < 80:
+        return 30
+    if 80 <= overall < 85:
+        return 40
+    if 85 <= overall < 90:
+        return 50
+    return 100
+
+def unlock_player_in_db(db: Session, current_user: User, player_id: int):
+    # Check if already unlocked
+    existing = db.query(UnlockedPlayer).filter(
+        UnlockedPlayer.user_id == current_user.id,
+        UnlockedPlayer.player_id == player_id
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Player already unlocked")
+        
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+        
+    price = get_unlock_price(player.overall)
+    
+    if current_user.bb_balance < price:
+        raise HTTPException(status_code=400, detail=f"Insufficient BB balance. Need {price} BB.")
+        
+    # Deduct and unlock
+    current_user.bb_balance -= price
+    unlock_entry = UnlockedPlayer(user_id=current_user.id, player_id=player_id)
+    db.add(unlock_entry)
+    db.commit()
+    
+    return {"message": f"Successfully unlocked {player.short_name}", "new_balance": current_user.bb_balance}

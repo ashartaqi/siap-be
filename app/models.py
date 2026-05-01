@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.db import Base
+from app.api.constants import INITIAL_BB_BALANCE
 
 class User(Base):
     __tablename__ = "users"
@@ -12,7 +13,7 @@ class User(Base):
     password = Column(String)
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
-    bb_balance = Column(Integer, default=100)
+    bb_balance = Column(Integer, default=INITIAL_BB_BALANCE)
     last_login_reward_at = Column(DateTime, nullable=True)
     last_chat_reward_at = Column(DateTime, nullable=True)
 

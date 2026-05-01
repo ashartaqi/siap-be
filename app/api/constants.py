@@ -9,6 +9,11 @@ FIXTURE_LEAGUES = [
     {"key": "CL", "label": "Champions League", "badge": "CL"},
 ]
 
+# BB Currency
+INITIAL_BB_BALANCE = 100
+DAILY_LOGIN_REWARD = 5
+CHAT_REWARD = 20
+
 # Player Positions
 
 VALID_PLAYER_POSITIONS = {

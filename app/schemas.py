@@ -5,7 +5,7 @@ Used for request bodies and response models in API routes.
 from typing import Optional, ClassVar, Set,List,Literal
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, ConfigDict, Field
-from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX
+from app.api.constants import VALID_PLAYER_POSITIONS, VALID_PREFERRED_FEET, PLAYER_STAT_MIN, PLAYER_STAT_MAX, PLAYER_TOTAL_STATS_MAX, INITIAL_BB_BALANCE
 
 
 class UserLogin(BaseModel):
@@ -42,13 +42,20 @@ class RegisteredUser(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
-    bb_balance: int = 100
+    bb_balance: int = INITIAL_BB_BALANCE
     token: Optional[str] = None
 
 
 class AccessToken(BaseModel):
     access_token: str
     token_type: str
+
+class UnlockStatus(BaseModel):
+    is_unlocked: bool
+
+class ShopUnlockResponse(BaseModel):
+    message: str
+    new_balance: int
 
 class PlayerStats(BaseModel):
     pace: Optional[int]
