@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.db import Base
+from app.constants import INITIAL_BB_BALANCE
 
 class User(Base):
     __tablename__ = "users"
@@ -12,6 +13,7 @@ class User(Base):
     password = Column(String)
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
+    bb_balance = Column(Integer, default=INITIAL_BB_BALANCE)
 
 class RefreshToken(Base):
     __tablename__ = "refresh_token"
@@ -131,7 +133,8 @@ class Match(Base):
     time = Column(String, nullable=True)
     team1 = Column(String, nullable=False)
     team2 = Column(String, nullable=False)
-    score_ft = Column(String, nullable=True)
+    team1_score = Column(Integer, nullable=True)
+    team2_score = Column(Integer, nullable=True)
     winner = Column(String, nullable=True)
     league = Column(String, nullable=True)
 
@@ -227,4 +230,45 @@ class DreamTeamSlot(Base):
     row = Column(Integer,nullable=True)
     player_id =Column(Integer,ForeignKey("players.id",ondelete = "CASCADE"), nullable = False)
     player = relationship("Player", lazy="joined") 
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+
+    @property
+    def username(self) -> str:
+        return self.user.username if self.user else ""
+
+
+class MatchComment(Base):
+    __tablename__ = "match_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    match_id = Column(Integer, ForeignKey("fixtures.id", ondelete="CASCADE"), nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+    fixture = relationship("Fixtures")
+
+    @property
+    def username(self) -> str:
+        return self.user.username if self.user else ""
+
+class UnlockedPlayer(Base):
+    __tablename__ = "unlocked_players"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
+
+    user = relationship("User")
+    player = relationship("Player")
 

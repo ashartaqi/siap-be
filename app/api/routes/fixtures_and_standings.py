@@ -12,7 +12,7 @@ from app.scripts.jobs import (
     fetch_leagues as fetch_leagues_job,
     fetch_fixtures as fetch_fixtures_job,
 )
-from app.api.constants import VALID_MATCH_STATUSES, FIXTURE_LEAGUES
+from app.constants import VALID_MATCH_STATUSES, FIXTURE_LEAGUES
 from app.core.config import settings
 
 

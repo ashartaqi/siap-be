@@ -8,9 +8,9 @@ from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Input
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from sklearn.preprocessing import MultiLabelBinarizer, StandardScaler
 from sklearn.model_selection import train_test_split
-from app.api.constants import DREAM_PLAYER_COLUMNS, DREAM_PLAYER_FEATURES, POSITION_GROUPS
+from app.constants import DREAM_PLAYER_COLUMNS, DREAM_PLAYER_FEATURES, POSITION_GROUPS
 
-CSV_FILE = os.path.join(os.path.dirname(__file__), "stats.csv")
+CSV_FILE = os.path.join(os.path.dirname(__file__), "stats.csv") # used a dataset from kaggle (fifa 23 dataset)
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "compiled_models")
 
 _position_model = None

@@ -1,9 +1,9 @@
 from app.core.db import SessionLocal
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from app.api.client.football_data import FootballDataClient
+from app.api.utils.football_data import FootballDataClient
 from app.models import Fixtures, LeagueStandings, Form
-from app.api.constants import FIXTURE_LEAGUES
+from app.constants import FIXTURE_LEAGUES
 from datetime import timedelta, datetime
 
 

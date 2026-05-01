@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -7,7 +8,9 @@ from app.core.security import (
     generate_refresh_token,
     set_refresh_cookie,
     clear_refresh_cookie,
+    get_current_user,
 )
+from app.models import User
 from app.crud import (
     authenticate_user,
     create_refresh_token,
@@ -16,6 +19,7 @@ from app.crud import (
     get_user_by_id,
     revoke_refresh_token,
     rotate_refresh_token,
+    check_and_award_daily_login_reward
 )
 from app.schemas import AccessToken, RegisteredUser, UserLogin, UserRegister
 
@@ -25,7 +29,6 @@ router = APIRouter()
 @router.post("/register", response_model=RegisteredUser)
 def register(user: UserRegister, db: Session = Depends(get_db)):
     try:
-
         db_user = create_user(db, username=user.username, email=user.email, password=user.password, first_name=user.first_name, last_name=user.last_name)
         if not db_user:
             raise HTTPException(status_code=400, detail="User registration failed")
@@ -50,10 +53,14 @@ def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
             )
+        # Reward Logic: Daily Login
+        check_and_award_daily_login_reward(db, db_user)
+
         access_token = create_access_token({"sub": db_user.email})
         refresh_token = generate_refresh_token()
         create_refresh_token(db, db_user.id, refresh_token)
         set_refresh_cookie(response, refresh_token)
+            
         return {"access_token": access_token, "token_type": "bearer"}
     except HTTPException:
         raise
@@ -108,3 +115,7 @@ def logout(
     if refresh_token:
         revoke_refresh_token(db, refresh_token)
     clear_refresh_cookie(response)
+
+@router.get("/me", response_model=RegisteredUser)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
