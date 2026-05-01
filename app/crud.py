@@ -1,11 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
-from datetime import date
-from app.core.security import verify_password, get_password_hash
+from datetime import date, datetime, timezone, timedelta
+from app.core.security import verify_password, get_password_hash, hash_refresh_token
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
+from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos
 from app.api.constants import TEAM_TOTAL_OVERALL_MAX
 from app.ai_models.dream_player import predict_player
 
@@ -27,6 +27,55 @@ def create_user(db: Session, username: str, email: str, first_name: str, last_na
     user = User(username=username, email=email,first_name=first_name, last_name=last_name, password=hashed_pw, super_user=super_user)
     return create(db, user, "Username or email already exists")
 
+def create_refresh_token(db: Session, user_id: int, plain_token: str) -> RefreshToken:
+    token_entry = RefreshToken(
+        user_id=user_id,
+        token_hash=hash_refresh_token(plain_token),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    return create(db, token_entry, "Error creating refresh token")
+
+def get_and_validate_refresh_token(db: Session, plain_token: str) -> RefreshToken | None:
+    token_entry = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == hash_refresh_token(plain_token)
+    ).first()
+    if not token_entry:
+        return None
+    expires_at = token_entry.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        return None
+    return token_entry
+
+def rotate_refresh_token(db: Session, old_token_id: int, user_id: int, new_plain_token: str) -> RefreshToken:
+    """Delete the old token and issue a new one atomically."""
+    db.query(RefreshToken).filter(
+        RefreshToken.id == old_token_id,
+        RefreshToken.user_id == user_id,
+    ).delete(synchronize_session=False)
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.expires_at < datetime.now(timezone.utc),
+    ).delete(synchronize_session=False)
+    new_entry = RefreshToken(
+        user_id=user_id,
+        token_hash=hash_refresh_token(new_plain_token),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    db.add(new_entry)
+    db.commit()
+    db.refresh(new_entry)
+    return new_entry
+
+def revoke_refresh_token(db: Session, plain_token: str) -> None:
+    db.query(RefreshToken).filter(
+        RefreshToken.token_hash == hash_refresh_token(plain_token)
+    ).delete(synchronize_session=False)
+    db.commit()
+
+def get_user_by_id(db: Session, user_id: int) -> User | None:
+    return db.query(User).filter(User.id == user_id).first()
 
 def authenticate_user(db: Session, email: str, password: str):
     user = db.query(User).filter(User.email == email).first()
@@ -280,6 +329,41 @@ def get_votes(
     return query.limit(limit).all()
 
 
+def get_votes_with_users(
+    db: Session,
+    fixture_id: int,
+    limit: int = 50,
+):
+    """Get all votes for a fixture, joined with user info."""
+    rows = (
+        db.query(
+            Votes.id,
+            Votes.user_id,
+            User.username,
+            User.first_name,
+            Votes.fixture_id,
+            Votes.prediction_home_score,
+            Votes.prediction_away_score,
+        )
+        .join(User, User.id == Votes.user_id)
+        .filter(Votes.fixture_id == fixture_id)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "username": r.username,
+            "first_name": r.first_name,
+            "fixture_id": r.fixture_id,
+            "prediction_home_score": r.prediction_home_score,
+            "prediction_away_score": r.prediction_away_score,
+        }
+        for r in rows
+    ]
+
+
 def create_vote(
     db: Session,
     user_id: int,
@@ -287,8 +371,10 @@ def create_vote(
     prediction_home_score: int,
     prediction_away_score: int,
 ):
-    if db.query(Votes).filter(Votes.fixture_id == fixture_id, Votes.user_id == user_id).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vote already exists")
+    """Cast a vote — deletes any existing vote by this user first (one vote at a time)."""
+    db.query(Votes).filter(Votes.user_id == user_id).delete(synchronize_session=False)
+    db.flush()
+
     vote = Votes(
         user_id=user_id,
         fixture_id=fixture_id,
@@ -298,15 +384,44 @@ def create_vote(
     return create(db, vote, "Error creating vote")
 
 
+def get_user_active_vote(db: Session, user_id: int):
+    """Return the single active vote for a user (if any)."""
+    return db.query(Votes).filter(Votes.user_id == user_id).first()
+
+
 def get_user_votes(db: Session, user_id: int):
     return db.query(Votes).filter(Votes.user_id == user_id).all()
 
 
-def delete_vote(db: Session, user_id: int, vote_id: int):
-    vote = db.query(Votes).filter(
-        Votes.id == vote_id,
-        Votes.user_id == user_id
-    ).first()
+def update_vote(
+    db: Session,
+    user_id: int,
+    fixture_id: int,
+    prediction_home_score: int,
+    prediction_away_score: int,
+):
+    """Update the prediction on the user's current vote, or move it to a new fixture."""
+    vote = db.query(Votes).filter(Votes.user_id == user_id).first()
+    if not vote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active vote found")
+    
+    vote.fixture_id = fixture_id
+    vote.prediction_home_score = prediction_home_score
+    vote.prediction_away_score = prediction_away_score
+    db.commit()
+    db.refresh(vote)
+    return vote
+
+
+def delete_vote(db: Session, user_id: int, vote_id: int = None):
+    if vote_id:
+        vote = db.query(Votes).filter(
+            Votes.id == vote_id,
+            Votes.user_id == user_id
+        ).first()
+    else:
+        vote = db.query(Votes).filter(Votes.user_id == user_id).first()
+    
     if vote:
         db.delete(vote)
         db.commit()

@@ -4,59 +4,64 @@ from app import crud
 from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
-from app.schemas import Votes
-from pydantic import BaseModel
+from app.schemas import Votes, VoteCreate, VoteWithUser
 
 
 router = APIRouter()
 
-class CreateVoteRequest(BaseModel):
-    fixture_id: int
-    prediction_home_score: int
-    prediction_away_score: int
 
-@router.get("/all-votes", response_model=list[Votes])
-def get_votes(
-    db: Session = Depends(get_db),
-    limit: int = 11,
-    fixture_id: int = None
-):
-    try:
-        votes = crud.get_votes(db, limit, fixture_id)
-        return votes
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post("")
-def create_vote(
+@router.get("/all-votes", response_model=list[VoteWithUser])
+def get_fixture_votes(
+    fixture_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    vote_data: CreateVoteRequest = Body(...)
+    limit: int = 50,
 ):
-    if vote_data.fixture_id:
-        return crud.create_vote(
-            db, current_user.id, vote_data.fixture_id,
-            vote_data.prediction_home_score, vote_data.prediction_away_score
-        )
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add fixture_id missing or invalid")
+    
+    return crud.get_votes_with_users(db, fixture_id, limit)
 
 
-@router.get("")
-def get_user_votes(
+@router.post("", response_model=Votes)
+def create_vote(
+    vote_data: VoteCreate = Body(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    return crud.get_user_votes(db, current_user.id)
+    
+    return crud.create_vote(
+        db, current_user.id, vote_data.fixture_id,
+        vote_data.prediction_home_score, vote_data.prediction_away_score
+    )
+
+
+@router.put("", response_model=Votes)
+def update_vote(
+    vote_data: VoteCreate = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    
+    return crud.update_vote(
+        db, current_user.id, vote_data.fixture_id,
+        vote_data.prediction_home_score, vote_data.prediction_away_score
+    )
+
+
+@router.get("", response_model=Votes | None)
+def get_user_vote(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    
+    return crud.get_user_active_vote(db, current_user.id)
 
 
 @router.delete("")
 def delete_vote(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    vote_id: int = None
+    vote_id: int = None,
 ):
-    if vote_id:
-        result = crud.delete_vote(db, current_user.id, vote_id)
-        return {"success": result}
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="vote_id is required")
+    
+    result = crud.delete_vote(db, current_user.id, vote_id)
+    return {"success": result}

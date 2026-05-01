@@ -45,8 +45,8 @@ class RegisteredUser(BaseModel):
     token: Optional[str] = None
 
 
-class Token(BaseModel):
-    token: str
+class AccessToken(BaseModel):
+    access_token: str
     token_type: str
 
 class PlayerStats(BaseModel):
@@ -87,7 +87,6 @@ class Players(BaseModel):
     club_team_id: Optional[int] = None
     club_name: Optional[str] = None
 
-    nationality_id: int
     nationality_name: str
 
     preferred_foot: str
@@ -111,12 +110,45 @@ class Players(BaseModel):
             return [p.position for p in v]
         return v
 
+class Team(BaseModel):
+    id: int
+    name: str
+    league_name: Optional[str] = None
+    nationality_name: Optional[str] = None
+    overall: Optional[int] = None
+    attack: Optional[int] = None
+    midfield: Optional[int] = None
+    defence: Optional[int] = None
+    home_stadium: Optional[str] = None
+    logo_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class Votes(BaseModel):
     id: int
     user_id: int
     fixture_id: int
     prediction_away_score: int
     prediction_home_score: int
+
+    class Config:
+        from_attributes = True
+
+class VoteCreate(BaseModel):
+    fixture_id: int
+    prediction_home_score: int
+    prediction_away_score: int
+
+class VoteWithUser(BaseModel):
+    id: int
+    user_id: int
+    username: str
+    first_name: str
+    fixture_id: int
+    prediction_home_score: int
+    prediction_away_score: int
 
     class Config:
         from_attributes = True

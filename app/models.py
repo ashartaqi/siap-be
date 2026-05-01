@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 
@@ -13,6 +13,14 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
 
+class RefreshToken(Base):
+    __tablename__ = "refresh_token"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=func.now())
 
 class Club(Base):
     __tablename__ = "club"
@@ -28,7 +36,6 @@ class Club(Base):
     defence = Column(Integer, index=True)
 
     home_stadium = Column(String, index=True)
-    captain = Column(String, index=True)
     logo_url = Column(String, index=True)
 
 
@@ -43,9 +50,7 @@ class Player(Base):
     weight_kg = Column(Integer, index=True)
 
     club_team_id = Column(Integer, ForeignKey("club.id", ondelete="CASCADE"))
-    club_name = Column(String, index=True)
 
-    nationality_id = Column(Integer, index=True)
     nationality_name = Column(String, index=True)
 
     preferred_foot = Column(String, index=True)
@@ -54,9 +59,14 @@ class Player(Base):
     work_rate = Column(String, index=True)
     player_face_url = Column(String, index=True)
 
+    club = relationship("Club", foreign_keys=[club_team_id], lazy="joined")
     player_stats = relationship("PlayerStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
     goalkeeper_stats = relationship("GoalkeeperStats", back_populates="player", uselist=False, cascade="all, delete-orphan")
     positions = relationship("PlayerPos", back_populates="player", cascade="all, delete-orphan")
+
+    @property
+    def club_name(self) -> str | None:
+        return self.club.name if self.club else None
 
 
 class PlayerPos(Base):
