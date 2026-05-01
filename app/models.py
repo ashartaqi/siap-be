@@ -239,3 +239,16 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=func.now())
 
     user = relationship("User")
+
+
+class MatchComment(Base):
+    __tablename__ = "match_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    match_id = Column(Integer, ForeignKey("fixtures.id", ondelete="CASCADE"), nullable=False)
+    content = Column(String, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+    fixture = relationship("Fixtures")

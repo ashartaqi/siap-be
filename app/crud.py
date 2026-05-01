@@ -5,7 +5,7 @@ from app.core.security import verify_password, get_password_hash, hash_refresh_t
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage
+from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage, MatchComment
 from app.api.constants import TEAM_TOTAL_OVERALL_MAX
 from app.ai_models.dream_player import predict_player
 
@@ -547,6 +547,33 @@ def get_chat_messages(db: Session, limit: int = 50):
 def create_chat_message(db: Session, user_id: int, content: str):
     message = ChatMessage(user_id=user_id, content=content)
     return create(db, message, "Error sending message")
+
+# MATCH COMMENTS
+def get_match_comments(db: Session, match_id: int):
+    rows = db.query(
+        MatchComment.id,
+        MatchComment.user_id,
+        MatchComment.match_id,
+        User.username,
+        MatchComment.content,
+        MatchComment.created_at
+    ).join(User, User.id == MatchComment.user_id).filter(MatchComment.match_id == match_id).order_by(desc(MatchComment.created_at)).all()
+    
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "match_id": r.match_id,
+            "username": r.username,
+            "content": r.content,
+            "created_at": r.created_at
+        }
+        for r in reversed(rows)
+    ]
+
+def create_match_comment(db: Session, user_id: int, match_id: int, content: str):
+    comment = MatchComment(user_id=user_id, match_id=match_id, content=content)
+    return create(db, comment, "Error posting comment")
 
 
 
