@@ -47,3 +47,16 @@ def get_user_custom_player(user_id: int, db: Session = Depends(get_db), current_
     if not player:
         raise HTTPException(status_code=404, detail=f"Custom player not found for user_id {user_id}")
     return player
+
+@router.post("/reward")
+def award_battle_reward(result: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # result: 'win', 'loss', 'draw'
+    reward = 10 # Participation
+    if result == 'win':
+        reward += 40
+    elif result == 'draw':
+        reward += 10 
+        
+    current_user.bb_balance += reward
+    db.commit()
+    return {"new_balance": current_user.bb_balance, "reward": reward}

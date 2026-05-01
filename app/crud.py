@@ -5,7 +5,7 @@ from app.core.security import verify_password, get_password_hash, hash_refresh_t
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
-from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage, MatchComment
+from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage, MatchComment, UnlockedPlayer
 from app.api.constants import TEAM_TOTAL_OVERALL_MAX
 from app.ai_models.dream_player import predict_player
 
@@ -24,7 +24,15 @@ def create(db: Session, model_item, error_msg: str = "Item already exists or an 
 
 def create_user(db: Session, username: str, email: str, first_name: str, last_name: str, password: str, super_user: bool = False):
     hashed_pw = get_password_hash(password)
-    user = User(username=username, email=email,first_name=first_name, last_name=last_name, password=hashed_pw, super_user=super_user)
+    user = User(
+        username=username, 
+        email=email,
+        first_name=first_name, 
+        last_name=last_name, 
+        password=hashed_pw, 
+        super_user=super_user,
+        bb_balance=100 # Initial gift
+    )
     return create(db, user, "Username or email already exists")
 
 def create_refresh_token(db: Session, user_id: int, plain_token: str) -> RefreshToken:
@@ -47,6 +55,13 @@ def get_and_validate_refresh_token(db: Session, plain_token: str) -> RefreshToke
     if expires_at < datetime.now(timezone.utc):
         return None
     return token_entry
+
+def add_bb_reward(db: Session, user_id: int, amount: int):
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.bb_balance += amount
+        db.commit()
+    return user
 
 def rotate_refresh_token(db: Session, old_token_id: int, user_id: int, new_plain_token: str) -> RefreshToken:
     """Delete the old token and issue a new one atomically."""
@@ -144,6 +159,7 @@ def remove_fav_team(db, user, team):
 # PLAYERS
 def get_players(
     db: Session,
+    user_id: int = None,
     limit: int = 11,
     team_id: int = None,
     name: str = None,
@@ -164,7 +180,6 @@ def get_players(
     physic: int = None,
 ):
     query = db.query(Player)
-
     if team_id:
         query = query.filter(Player.club_team_id == team_id)
     if name:
@@ -232,7 +247,17 @@ def get_players(
     else:
         query = query.order_by(desc(Player.overall))
 
-    return query.offset(skip).limit(limit).all()
+    # Fetch unlocked player IDs for this user
+    unlocked_ids = set()
+    if user_id:
+        unlocked_ids = {u[0] for u in db.query(UnlockedPlayer.player_id).filter(UnlockedPlayer.user_id == user_id).all()}
+    
+    players = query.offset(skip).limit(limit).all()
+    
+    for p in players:
+        p.is_unlocked = (p.id in unlocked_ids or p.overall < 70) if user_id else True
+        
+    return players
 
 
 def add_fav_player(db, user, player):
@@ -546,6 +571,15 @@ def get_chat_messages(db: Session, limit: int = 50):
 
 def create_chat_message(db: Session, user_id: int, content: str):
     message = ChatMessage(user_id=user_id, content=content)
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        today = datetime.now(timezone.utc).date()
+        if not user.last_chat_reward_at or user.last_chat_reward_at.date() < today:
+            user.bb_balance += 20
+            user.last_chat_reward_at = datetime.now(timezone.utc)
+            db.commit()
+            
     return create(db, message, "Error sending message")
 
 # MATCH COMMENTS
@@ -573,6 +607,12 @@ def get_match_comments(db: Session, match_id: int):
 
 def create_match_comment(db: Session, user_id: int, match_id: int, content: str):
     comment = MatchComment(user_id=user_id, match_id=match_id, content=content)
+    
+    # Reward every 3 comments
+    count = db.query(MatchComment).filter(MatchComment.user_id == user_id).count()
+    if (count + 1) % 3 == 0:
+        add_bb_reward(db, user_id, 10)
+        
     return create(db, comment, "Error posting comment")
 
 

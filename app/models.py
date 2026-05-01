@@ -12,6 +12,9 @@ class User(Base):
     password = Column(String)
     created_at = Column(DateTime, default=func.now())
     super_user = Column(Boolean, default=False)
+    bb_balance = Column(Integer, default=100)
+    last_login_reward_at = Column(DateTime, nullable=True)
+    last_chat_reward_at = Column(DateTime, nullable=True)
 
 class RefreshToken(Base):
     __tablename__ = "refresh_token"
@@ -252,3 +255,13 @@ class MatchComment(Base):
 
     user = relationship("User")
     fixture = relationship("Fixtures")
+
+class UnlockedPlayer(Base):
+    __tablename__ = "unlocked_players"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
+    unlocked_at = Column(DateTime, default=func.now())
+
+    user = relationship("User")
+    player = relationship("Player")

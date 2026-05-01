@@ -42,6 +42,7 @@ class RegisteredUser(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
+    bb_balance: int = 100
     token: Optional[str] = None
 
 
@@ -99,6 +100,7 @@ class Players(BaseModel):
     goalkeeper_stats: Optional[GoalkeeperStats]
 
     player_face_url: Optional[str] = None
+    is_unlocked: bool = False
 
     class Config:
         from_attributes = True

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -52,10 +53,22 @@ def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
             )
+        # Reward Logic: Daily Login (Defensive & Early)
+        try:
+            today = datetime.now(timezone.utc).date()
+            last_reward = db_user.last_login_reward_at
+            if not last_reward or last_reward.date() < today:
+                db_user.bb_balance = (db_user.bb_balance or 0) + 5
+                db_user.last_login_reward_at = datetime.now(timezone.utc)
+                # We don't commit yet, we let create_refresh_token do it or commit after
+        except Exception as reward_error:
+            print(f"Reward error ignored: {reward_error}")
+
         access_token = create_access_token({"sub": db_user.email})
         refresh_token = generate_refresh_token()
-        create_refresh_token(db, db_user.id, refresh_token)
+        create_refresh_token(db, db_user.id, refresh_token) # This commits the balance change too!
         set_refresh_cookie(response, refresh_token)
+            
         return {"access_token": access_token, "token_type": "bearer"}
     except HTTPException:
         raise

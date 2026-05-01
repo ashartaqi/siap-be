@@ -13,6 +13,7 @@ router = APIRouter()
 @router.get("", response_model=list[Players])
 def get_players(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     limit: int = 11,
     team_id: int = None,
     name: str = None,
@@ -34,7 +35,7 @@ def get_players(
 ):
     try:
         players = crud.get_players(
-            db=db, limit=limit, skip=skip, team_id=team_id, name=name, nationality_name=nationality_name, position=position,
+            db=db, user_id=current_user.id, limit=limit, skip=skip, team_id=team_id, name=name, nationality_name=nationality_name, position=position,
             min_overall=min_overall, max_overall=max_overall, min_age=min_age, max_age=max_age, preferred_foot=preferred_foot,
             order_by_stat=order_by_stat, pace=pace, shooting=shooting, passing=passing,
             dribbling=dribbling, defending=defending, physic=physic,
