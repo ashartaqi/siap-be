@@ -196,6 +196,7 @@ class LeagueStandings(BaseModel):
 
 
 class PlayerBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     VALID_POSITIONS: ClassVar[Set[str]] = {pos for group in VALID_PLAYER_POSITIONS.values() for pos in group}
     VALID_FEET: ClassVar[Set[str]] = set(VALID_PREFERRED_FEET)
 
