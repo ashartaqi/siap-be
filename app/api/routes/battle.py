@@ -16,7 +16,13 @@ from app.constants import (
     BATTLE_WIN_REWARD,
     BATTLE_DRAW_REWARD,
 )
-from app.api.utils.engine import FootballEngine, map_team_to_engine
+from app.api.utils.engine import (FootballEngine, 
+        map_team_to_engine,
+        to_player_dict,
+        attack_score,
+        defense_score,
+        position_bonus
+)
 
 router = APIRouter()
 
@@ -118,41 +124,6 @@ def simulate_player_battle(
 
     opp_user = crud.get_user_by_id(db, opponent_id)
     opp_name = opp_user.username if opp_user else f"User {opponent_id}"
-
-    def to_player_dict(team) -> dict:
-        slots = team.slots
-        all_players = [s.player for s in slots if s.player]
-        def avg(attr):
-            vals = [getattr(p, attr, 0) for p in all_players]
-            return sum(vals) / len(vals) if vals else 50
-        return {
-            "shooting":  avg("shooting"),
-            "pace":      avg("pace"),
-            "dribbling": avg("dribbling"),
-            "defending": avg("defending"),
-            "physical":  avg("physic"),
-            "overall":   avg("overall"),
-            "position":  slots[0].position if slots else "CM",
-        }
-
-    def attack_score(p):
-        return 0.30 * p["shooting"] + 0.25 * p["pace"] + 0.25 * p["dribbling"] + 0.20 * p["overall"]
-
-    def defense_score(p):
-        return 0.40 * p["defending"] + 0.30 * p["physical"] + 0.30 * p["overall"]
-
-    def position_bonus(p):
-        pos = p["position"]
-        if pos in ["ST", "CF", "LW", "RW"]:
-            return {"attack": 1.1, "defense": 0.9}
-        elif pos in ["CM", "CAM", "CDM"]:
-            return {"attack": 1.0, "defense": 1.0}
-        elif pos in ["CB", "LB", "RB"]:
-            return {"attack": 0.85, "defense": 1.15}
-        elif pos == "GK":
-            return {"attack": 0.3, "defense": 1.5}
-        else:
-            return {"attack": 1.0, "defense": 1.0}
 
     p1 = to_player_dict(my_team)
     p2 = to_player_dict(opp_team)

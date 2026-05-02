@@ -175,3 +175,39 @@ def map_team_to_engine(team, team_name: str) -> EngineTeam:
             ))
 
     return EngineTeam(name=team_name, players=engine_players)
+
+def avg(attr, all_players):
+            vals = [getattr(p, attr, 0) for p in all_players]
+            return sum(vals) / len(vals) if vals else 50
+
+def to_player_dict(team) -> dict:
+        slots = team.slots
+        all_players = [s.player for s in slots if s.player]
+        return {
+            "shooting":  avg("shooting", all_players),
+            "pace":      avg("pace", all_players),
+            "dribbling": avg("dribbling", all_players),
+            "defending": avg("defending", all_players),
+            "physical":  avg("physic", all_players),
+            "overall":   avg("overall", all_players),
+            "position":  slots[0].position if slots else "CM",
+        }
+
+def attack_score(p):
+    return 0.30 * p["shooting"] + 0.25 * p["pace"] + 0.25 * p["dribbling"] + 0.20 * p["overall"]    
+
+def defense_score(p):
+    return 0.40 * p["defending"] + 0.30 * p["physical"] + 0.30 * p["overall"]   
+
+def position_bonus(p):
+    pos = p["position"]
+    if pos in ["ST", "CF", "LW", "RW"]:
+        return {"attack": 1.1, "defense": 0.9}
+    elif pos in ["CM", "CAM", "CDM"]:
+        return {"attack": 1.0, "defense": 1.0}
+    elif pos in ["CB", "LB", "RB"]:
+        return {"attack": 0.85, "defense": 1.15}
+    elif pos == "GK":
+        return {"attack": 0.3, "defense": 1.5}
+    else:
+        return {"attack": 1.0, "defense": 1.0}    
