@@ -18,10 +18,7 @@ from app.constants import (
 )
 from app.api.utils.engine import (FootballEngine, 
         map_team_to_engine,
-        to_player_dict,
-        attack_score,
-        defense_score,
-        position_bonus
+        simulate_player_match
 )
 
 router = APIRouter()
@@ -125,35 +122,14 @@ def simulate_player_battle(
     opp_user = crud.get_user_by_id(db, opponent_id)
     opp_name = opp_user.username if opp_user else f"User {opponent_id}"
 
-    p1 = to_player_dict(my_team)
-    p2 = to_player_dict(opp_team)
-
-    b1, b2 = position_bonus(p1), position_bonus(p2)
-    p1_attack = attack_score(p1) * b1["attack"]
-    p1_def    = defense_score(p1) * b1["defense"]
-    p2_attack = attack_score(p2) * b2["attack"]
-    p2_def    = defense_score(p2) * b2["defense"]
-
-    score1, score2, log = 0, 0, []
-    for minute in range(10):
-        if p1_attack * random.uniform(0.8, 1.2) > p2_def * random.uniform(0.8, 1.2):
-            score1 += 1
-            log.append(f"{current_user.username} scores at chance {minute + 1}")
-        if p2_attack * random.uniform(0.8, 1.2) > p1_def * random.uniform(0.8, 1.2):
-            score2 += 1
-            log.append(f"{opp_name} scores at chance {minute + 1}")
-
-    if score1 > score2:
-        winner, reward = "me", BATTLE_PARTICIPATION_REWARD + BATTLE_WIN_REWARD
-    elif score2 > score1:
-        winner, reward = "opponent", BATTLE_PARTICIPATION_REWARD
-    else:
-        winner, reward = "draw", BATTLE_PARTICIPATION_REWARD + BATTLE_DRAW_REWARD
+    score1, score2, log, winner, reward, p1_attack, p2_attack = simulate_player_match(
+        my_team, opp_team, current_user.username, opp_name
+    )
 
     updated_user = crud.add_bb_reward(db, current_user.id, reward)
 
     total_goals = max(score1 + score2, 1)
-    return MatchSimulationResult(
+    result = MatchSimulationResult(
         score1=score1,
         score2=score2,
         stats={
@@ -169,3 +145,4 @@ def simulate_player_battle(
         reward=reward,
         new_balance=updated_user.bb_balance,
     )
+    return result
