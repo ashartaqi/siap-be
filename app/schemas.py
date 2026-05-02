@@ -36,6 +36,22 @@ class UserRegister(BaseModel):
         return values
 
 
+class UserResetPassword(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def match_passwords(cls, values):
+        if len(values.password) < 7:
+            raise ValueError("Password length is too short")
+        if values.password != values.confirm_password:
+            raise ValueError("Passwords don't match")
+        return values
+    
+
+
 class RegisteredUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
