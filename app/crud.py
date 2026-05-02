@@ -9,6 +9,10 @@ from app.models import User, RefreshToken, Club, Player, PlayerStats, Goalkeeper
 from app.constants import (
     TEAM_TOTAL_OVERALL_MAX, 
     CHAT_REWARD,
+    MATCH_COMMENT_REWARD,
+    BATTLE_WIN_REWARD,
+    BATTLE_DRAW_REWARD,
+    BATTLE_PARTICIPATION_REWARD,
     SHOP_PRICE_70_80,
     SHOP_PRICE_80_85,
     SHOP_PRICE_85_90,
@@ -634,11 +638,10 @@ def get_match_comments(db: Session, match_id: int):
 
 def create_match_comment(db: Session, user_id: int, match_id: int, content: str):
     comment = MatchComment(user_id=user_id, match_id=match_id, content=content)
-    
-    # Reward for every comment
-    reward = 10
+
+    reward = MATCH_COMMENT_REWARD
     add_bb_reward(db, user_id, reward)
-    
+
     db_comment = create(db, comment, "Error posting comment")
     return db_comment, reward
 
