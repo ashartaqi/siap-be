@@ -127,6 +127,15 @@ def authenticate_user(db: Session, email: str, password: str):
         return user
     return None
 
+def reset_user_password(db: Session, email: str, username: str, password: str):
+    user = db.query(User).filter(User.email == email, User.username == username).first()
+    if not user:
+        return None
+    user.password = get_password_hash(password)
+    db.commit()
+    db.refresh(user)
+    return user
+
 # TEAMS
 def get_teams(
     db: Session, skip: int = 0,

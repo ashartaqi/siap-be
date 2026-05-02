@@ -19,9 +19,10 @@ from app.crud import (
     get_user_by_id,
     revoke_refresh_token,
     rotate_refresh_token,
+    reset_user_password,
     check_and_award_daily_login_reward
 )
-from app.schemas import AccessToken, RegisteredUser, UserLogin, UserRegister
+from app.schemas import AccessToken, RegisteredUser, UserLogin, UserRegister, UserResetPassword
 
 router = APIRouter()
 
@@ -40,6 +41,23 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         print("Registration error:", str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/reset-password")
+def reset_password(user: UserResetPassword, db: Session = Depends(get_db)):
+    try:
+        db_user = reset_user_password(db, email=user.email, username=user.username, password=user.password)
+        if not db_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found with the given username and email.",
+            )
+        return {"message": "Password reset successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Password reset error:", str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 
