@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from app.constants import DREAM_PLAYER_COLUMNS, DREAM_PLAYER_FEATURES, POSITION_GROUPS
 
 CSV_FILE = os.path.join(os.path.dirname(__file__), "stats.csv") # used a dataset from kaggle (fifa 23 dataset)
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "compiled_models")
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "compiled_models/dream_player")
 
 _position_model = None
 _rating_model = None
