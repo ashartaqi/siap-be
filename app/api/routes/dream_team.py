@@ -63,7 +63,6 @@ def delete_dream_team(db: Session = Depends(get_db), current_user: User = Depend
 @router.get("/{formation}", response_model=DreamTeamGet)
 def get_optimized_dream_team(formation: str, current_user: User = Depends(get_current_user)):
     try:
-        team = suggestion(formation)
-        return build_suggestion_response(formation, team)
+        return suggestion(formation)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
