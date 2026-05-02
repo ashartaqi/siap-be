@@ -64,7 +64,7 @@ def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
         return {
             "access_token": access_token, 
             "token_type": "bearer",
-            "reward_amount": reward if reward > 0 else None
+            "reward_amount": reward
         }
     except HTTPException:
         raise
