@@ -50,6 +50,7 @@ class RegisteredUser(BaseModel):
 class AccessToken(BaseModel):
     access_token: str
     token_type: str
+    reward_amount: Optional[int] = None
 
 
 class ShopUnlockResponse(BaseModel):
@@ -359,6 +360,7 @@ class ChatMessageRead(BaseModel):
     username: str
     content: str
     created_at: datetime
+    reward_amount: Optional[int] = None
 
 
 class MatchCommentCreate(BaseModel):
@@ -374,6 +376,7 @@ class MatchCommentRead(BaseModel):
     username: str
     content: str
     created_at: datetime
+    reward_amount: Optional[int] = None
 
 
 class MatchSimulationStats(BaseModel):

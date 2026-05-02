@@ -17,5 +17,7 @@ def get_match_comments(match_id: int, db: Session = Depends(get_db), current_use
 
 @router.post("/{match_id}", response_model=MatchCommentRead, status_code=status.HTTP_201_CREATED)
 def post_match_comment(match_id: int, payload: MatchCommentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    match_comment = crud.create_match_comment(db, user_id=current_user.id, match_id=match_id, content=payload.content)
-    return match_comment
+    comment, reward = crud.create_match_comment(db, user_id=current_user.id, match_id=match_id, content=payload.content)
+    resp = MatchCommentRead.model_validate(comment)
+    resp.reward_amount = reward
+    return resp

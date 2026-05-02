@@ -17,5 +17,7 @@ def get_chat_messages(db: Session = Depends(get_db), current_user: User = Depend
 
 @router.post("", response_model=ChatMessageRead, status_code=status.HTTP_201_CREATED)
 def send_chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    chat_msg = crud.create_chat_message(db, user_id=current_user.id, content=payload.content)
-    return chat_msg
+    message, reward = crud.create_chat_message(db, user_id=current_user.id, content=payload.content)
+    resp = ChatMessageRead.model_validate(message)
+    resp.reward_amount = reward if reward > 0 else None
+    return resp

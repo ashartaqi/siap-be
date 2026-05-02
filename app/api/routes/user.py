@@ -54,14 +54,18 @@ def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
                 detail="Incorrect email or password",
             )
         # Reward Logic: Daily Login
-        check_and_award_daily_login_reward(db, db_user)
+        reward = check_and_award_daily_login_reward(db, db_user)
 
         access_token = create_access_token({"sub": db_user.email})
         refresh_token = generate_refresh_token()
         create_refresh_token(db, db_user.id, refresh_token)
         set_refresh_cookie(response, refresh_token)
             
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {
+            "access_token": access_token, 
+            "token_type": "bearer",
+            "reward_amount": reward if reward > 0 else None
+        }
     except HTTPException:
         raise
     except Exception as e:
