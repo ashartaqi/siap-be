@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
 from app.schemas import Fixtures, LeagueStandings
-from app.models import User
+from app.models import User, Club
 from app.core.security import get_current_user
+from app.ai_models.match_score import predict_match
 from app.scripts.jobs import (
     update_fixtures as update_fixtures_job,
     fetch_leagues as fetch_leagues_job,
@@ -105,3 +106,21 @@ async def fetch_fixtures(background_tasks: BackgroundTasks, cron_key: Optional[s
         return {"message": "Fixtures addition started in background"}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+@router.get("/predict")
+def fixture_prediction(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    team1_name: str = None,
+    team2_name: str = None
+):
+    team1 = db.query(Club).filter(Club.name == team1_name).first()
+    team2 = db.query(Club).filter(Club.name == team2_name).first()
+
+    return predict_match(
+            team1.name, team2.name,
+            {"attack": team1.attack, "midfield": team1.midfield,
+            "defence": team1.defence, "overall": team1.overall},
+            {"attack": team2.attack, "midfield": team2.midfield,
+            "defence": team2.defence, "overall": team2.overall},
+        )

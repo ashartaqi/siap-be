@@ -5,7 +5,7 @@ from app import crud
 from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
-from app.ai_models.dream_team import suggestion, build_suggestion_response
+from app.ai_models.dream_team import suggestion
 from app.schemas import DreamTeamCreate, DreamTeamGet, DreamTeamSlotUpdate
 
 router = APIRouter()
