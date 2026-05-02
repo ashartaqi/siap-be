@@ -34,9 +34,8 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="User registration failed")
         token = create_access_token({"sub": db_user.email})
 
-        resp = RegisteredUser.model_validate(db_user)
-        resp.token = token
-        return resp
+        db_user.token = token
+        return RegisteredUser.model_validate(db_user)
     except HTTPException:
         raise
     except Exception as e:
