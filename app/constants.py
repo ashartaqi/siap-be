@@ -18,6 +18,9 @@ BATTLE_PARTICIPATION_REWARD = 10
 BATTLE_WIN_REWARD = 40
 BATTLE_DRAW_REWARD = 10
 
+# Players below this overall are always unlocked for free
+FREE_PLAYER_CAP = 70
+
 # Shop Prices
 SHOP_PRICE_70_80 = 30
 SHOP_PRICE_80_85 = 40
