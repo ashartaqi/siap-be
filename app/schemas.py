@@ -37,8 +37,8 @@ class UserRegister(BaseModel):
 
 
 class UserResetPassword(BaseModel):
-    username: str
     email: EmailStr
+    current_password: str
     password: str
     confirm_password: str
 

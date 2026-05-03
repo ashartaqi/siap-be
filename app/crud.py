@@ -7,7 +7,8 @@ from sqlalchemy.orm import contains_eager, joinedload
 from fastapi import HTTPException, status
 from app.models import User, RefreshToken, Club, Player, PlayerStats, GoalkeeperStats, FavouritePlayers, FavouriteClubs, LeagueStandings, Form, Votes, Fixtures, CustomPlayer, DreamTeam, DreamTeamSlot, PlayerPos, ChatMessage, MatchComment, UnlockedPlayer
 from app.constants import (
-    TEAM_TOTAL_OVERALL_MAX, 
+    TEAM_TOTAL_OVERALL_MAX,
+    FREE_PLAYER_CAP,
     CHAT_REWARD,
     MATCH_COMMENT_REWARD,
     SHOP_PRICE_70_80,
@@ -127,10 +128,16 @@ def authenticate_user(db: Session, email: str, password: str):
     return None
 
 
-def reset_user_password(db: Session, email: str, username: str, password: str):
-    user = db.query(User).filter(User.email == email, User.username == username).first()
+def reset_user_password(db: Session, email: str, current_password: str, password: str):
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         return None
+    if not verify_password(current_password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect.",
+        )
+    db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete(synchronize_session=False)
     user.password = get_password_hash(password)
     db.commit()
     db.refresh(user)
@@ -298,14 +305,14 @@ def get_players(
 
     if unlock_status and unlock_status != "all" and user_id:
         if unlock_status == "unlocked":
-            query = query.filter((Player.id.in_(unlocked_ids)) | (Player.overall < 70))
+            query = query.filter((Player.id.in_(unlocked_ids)) | (Player.overall < FREE_PLAYER_CAP))
         elif unlock_status == "locked":
-            query = query.filter((Player.overall >= 70) & (~Player.id.in_(unlocked_ids)))
+            query = query.filter((Player.overall >= FREE_PLAYER_CAP) & (~Player.id.in_(unlocked_ids)))
 
     players = query.offset(skip).limit(limit).all()
     
     for p in players:
-        p.is_unlocked = (p.id in unlocked_ids or p.overall < 70) if user_id else True
+        p.is_unlocked = (p.id in unlocked_ids or p.overall < FREE_PLAYER_CAP) if user_id else True
         
     return players
 
@@ -718,9 +725,9 @@ def update_dream_team(db: Session, user_id: int, formation: str, slots: list):
 
 # SHOP
 def get_unlock_price(overall: int) -> int:
-    if overall < 70:
+    if overall < FREE_PLAYER_CAP:
         return 0
-    if 70 <= overall < 80:
+    if FREE_PLAYER_CAP <= overall < 80:
         return SHOP_PRICE_70_80
     if 80 <= overall < 85:
         return SHOP_PRICE_80_85

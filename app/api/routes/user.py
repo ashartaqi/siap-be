@@ -44,14 +44,17 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password")
-def reset_password(user: UserResetPassword, db: Session = Depends(get_db)):
+def reset_password(user: UserResetPassword, response: Response, db: Session = Depends(get_db)):
     try:
-        db_user = reset_user_password(db, email=user.email, username=user.username, password=user.password)
+        db_user = reset_user_password(db, email=user.email, current_password=user.current_password, password=user.password)
         if not db_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found with the given username and email.",
+                detail="No account found with that email address.",
             )
+        new_refresh_token = generate_refresh_token()
+        create_refresh_token(db, db_user.id, new_refresh_token)
+        set_refresh_cookie(response, new_refresh_token)
         return {"message": "Password reset successfully."}
     except HTTPException:
         raise
