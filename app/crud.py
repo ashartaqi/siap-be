@@ -127,10 +127,15 @@ def authenticate_user(db: Session, email: str, password: str):
     return None
 
 
-def reset_user_password(db: Session, email: str, username: str, password: str):
-    user = db.query(User).filter(User.email == email, User.username == username).first()
+def reset_user_password(db: Session, email: str, current_password: str, password: str):
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         return None
+    if not verify_password(current_password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect.",
+        )
     user.password = get_password_hash(password)
     db.commit()
     db.refresh(user)
