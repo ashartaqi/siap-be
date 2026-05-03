@@ -341,6 +341,10 @@ class CustomPlayerGet(CustomPlayerCreate):
     position: str
     overall: int
 
+    @model_validator(mode="after")
+    def check_total(self):
+        return self
+
 
 class FormationBase(BaseModel):
     formation: Literal["4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "3-4-3"]

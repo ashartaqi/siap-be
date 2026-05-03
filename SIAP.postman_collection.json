@@ -58,7 +58,7 @@
           "response": []
         },
         {
-          "name": "Reset Password",
+          "name": "Update Password",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
