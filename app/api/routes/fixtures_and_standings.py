@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, 
 from sqlalchemy.orm import Session
 from app import crud
 from app.api.deps import get_db
-from app.schemas import Fixtures, LeagueStandings
-from app.models import User, Club
+from app.schemas import Fixtures, LeagueStandings, PredictedFixture
+from app.models import User
 from app.core.security import get_current_user
 from app.ai_models.match_score import predict_match
 from app.scripts.jobs import (
@@ -107,20 +107,43 @@ async def fetch_fixtures(background_tasks: BackgroundTasks, cron_key: Optional[s
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
-@router.get("/predict")
-def fixture_prediction(
+@router.get("/predict", response_model=list[PredictedFixture])
+def fixture_predictions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    team1_name: str = None,
-    team2_name: str = None
+    limit: int = 10,
 ):
-    team1 = db.query(Club).filter(Club.name == team1_name).first()
-    team2 = db.query(Club).filter(Club.name == team2_name).first()
+    fixtures = crud.get_upcoming_fixtures(db, limit=limit)
+    results = []
+    for fixture in fixtures:
+        home_club = crud.get_club_by_name(db, fixture.home_team)
+        away_club = crud.get_club_by_name(db, fixture.away_team)
 
-    return predict_match(
-            team1.name, team2.name,
-            {"attack": team1.attack, "midfield": team1.midfield,
-            "defence": team1.defence, "overall": team1.overall},
-            {"attack": team2.attack, "midfield": team2.midfield,
-            "defence": team2.defence, "overall": team2.overall},
-        )
+        if home_club and away_club:
+            try:
+                pred = predict_match(
+                    fixture.home_team, fixture.away_team,
+                    {"attack": home_club.attack, "midfield": home_club.midfield,
+                     "defence": home_club.defence, "overall": home_club.overall},
+                    {"attack": away_club.attack, "midfield": away_club.midfield,
+                     "defence": away_club.defence, "overall": away_club.overall},
+                )
+                
+                results.append(PredictedFixture(
+                    id=fixture.id,
+                    date=fixture.date,
+                    home_team=fixture.home_team,
+                    away_team=fixture.away_team,
+                    league=fixture.league,
+                    status=fixture.status,
+                    away_team_score=fixture.away_team_score,
+                    home_team_score=fixture.home_team_score,
+                    winner=fixture.winner,
+                    predicted_home_score=pred["team1_score_rounded"],
+                    predicted_away_score=pred["team2_score_rounded"],
+                    predicted_outcome=pred["outcome"],
+                ))
+            except Exception:
+                pass
+
+    return results

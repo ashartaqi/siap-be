@@ -69,6 +69,23 @@ class AccessToken(BaseModel):
     reward_amount: int = 0
 
 
+class PredictedFixture(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: str
+    home_team: str
+    away_team: str
+    league: Optional[str] = None
+    status: Optional[str] = None
+    away_team_score: Optional[str] = None
+    home_team_score: Optional[str] = None
+    winner: Optional[str] = None
+    predicted_home_score: Optional[int] = None
+    predicted_away_score: Optional[int] = None
+    predicted_outcome: Optional[str] = None
+
+
 class ShopUnlockResponse(BaseModel):
     message: str
     new_balance: int

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db

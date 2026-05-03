@@ -10,9 +10,6 @@ from app.constants import (
     TEAM_TOTAL_OVERALL_MAX, 
     CHAT_REWARD,
     MATCH_COMMENT_REWARD,
-    BATTLE_WIN_REWARD,
-    BATTLE_DRAW_REWARD,
-    BATTLE_PARTICIPATION_REWARD,
     SHOP_PRICE_70_80,
     SHOP_PRICE_80_85,
     SHOP_PRICE_85_90,
@@ -118,14 +115,17 @@ def revoke_refresh_token(db: Session, plain_token: str) -> None:
     ).delete(synchronize_session=False)
     db.commit()
 
+
 def get_user_by_id(db: Session, user_id: int) -> User | None:
     return db.query(User).filter(User.id == user_id).first()
+
 
 def authenticate_user(db: Session, email: str, password: str):
     user = db.query(User).filter(User.email == email).first()
     if user and verify_password(password, user.password):
         return user
     return None
+
 
 def reset_user_password(db: Session, email: str, username: str, password: str):
     user = db.query(User).filter(User.email == email, User.username == username).first()
@@ -135,6 +135,7 @@ def reset_user_password(db: Session, email: str, username: str, password: str):
     db.commit()
     db.refresh(user)
     return user
+
 
 # TEAMS
 def get_teams(
@@ -175,6 +176,10 @@ def get_teams(
         query = query.filter(Club.defence >= min_defence)
 
     return query.order_by(desc(Club.overall)).offset(skip).limit(limit).all()
+
+
+def get_club_by_name(db: Session, name: str):
+    return db.query(Club).filter(Club.name == name).first()
 
 
 def add_fav_team(db: Session, user: int, team: int):
@@ -360,6 +365,16 @@ def get_fixtures(
         query = query.filter(Fixtures.date == date)
     
     return query.limit(limit).all()
+
+
+def get_upcoming_fixtures(db: Session, limit: int = 10) -> list:
+    return (
+        db.query(Fixtures)
+        .filter(Fixtures.status.in_(["SCHEDULED", "TIMED"]))
+        .order_by(Fixtures.date)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_standings(
