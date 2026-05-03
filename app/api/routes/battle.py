@@ -1,3 +1,4 @@
+import random
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app import crud
@@ -15,7 +16,10 @@ from app.constants import (
     BATTLE_WIN_REWARD,
     BATTLE_DRAW_REWARD,
 )
-from app.api.utils.engine import FootballEngine, map_team_to_engine
+from app.api.utils.engine import (FootballEngine, 
+        map_team_to_engine,
+        simulate_player_match
+)
 
 router = APIRouter()
 
@@ -50,8 +54,8 @@ def get_user_custom_player(user_id: int, db: Session = Depends(get_db), current_
     return player
 
 
-@router.post("/simulate/{opponent_id}", response_model=MatchSimulationResult)
-def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.post("/team/simulate/{opponent_id}", response_model=MatchSimulationResult)
+def simulate_team_battle(opponent_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     my_team = crud.get_dream_team(db, current_user.id)
     if not my_team:
         raise HTTPException(status_code=400, detail="You do not have a Dream Team")
@@ -100,3 +104,45 @@ def simulate_battle(opponent_id: int, db: Session = Depends(get_db), current_use
     )
 
     return match_result
+
+@router.post("/player/simulate/{opponent_id}", response_model=MatchSimulationResult)
+def simulate_player_battle(
+    opponent_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    my_team = crud.get_dream_team(db, current_user.id)
+    if not my_team:
+        raise HTTPException(status_code=400, detail="You do not have a Dream Team")
+
+    opp_team = crud.get_dream_team(db, opponent_id)
+    if not opp_team:
+        raise HTTPException(status_code=400, detail="Opponent does not have a Dream Team")
+
+    opp_user = crud.get_user_by_id(db, opponent_id)
+    opp_name = opp_user.username if opp_user else f"User {opponent_id}"
+
+    score1, score2, log, winner, reward, p1_attack, p2_attack = simulate_player_match(
+        my_team, opp_team, current_user.username, opp_name
+    )
+
+    updated_user = crud.add_bb_reward(db, current_user.id, reward)
+
+    total_goals = max(score1 + score2, 1)
+    result = MatchSimulationResult(
+        score1=score1,
+        score2=score2,
+        stats={
+            "shots1": 10,
+            "shots2": 10,
+            "xg1": round(p1_attack / (p1_attack + p2_attack) * total_goals, 2),
+            "xg2": round(p2_attack / (p1_attack + p2_attack) * total_goals, 2),
+            "possession1": int(p1_attack / (p1_attack + p2_attack) * 100),
+            "possession2": int(p2_attack / (p1_attack + p2_attack) * 100),
+        },
+        log=log,
+        winner=winner,
+        reward=reward,
+        new_balance=updated_user.bb_balance,
+    )
+    return result

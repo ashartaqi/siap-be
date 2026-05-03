@@ -5,7 +5,7 @@ from app import crud
 from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
-from app.ai_models.dream_team import suggestion, build_suggestion_response
+from app.ai_models.dream_team import suggestion
 from app.schemas import DreamTeamCreate, DreamTeamGet, DreamTeamSlotUpdate
 
 router = APIRouter()
@@ -63,7 +63,6 @@ def delete_dream_team(db: Session = Depends(get_db), current_user: User = Depend
 @router.get("/{formation}", response_model=DreamTeamGet)
 def get_optimized_dream_team(formation: str, current_user: User = Depends(get_current_user)):
     try:
-        team = suggestion(formation)
-        return build_suggestion_response(formation, team)
+        return suggestion(formation)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

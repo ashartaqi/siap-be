@@ -36,6 +36,22 @@ class UserRegister(BaseModel):
         return values
 
 
+class UserResetPassword(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def match_passwords(cls, values):
+        if len(values.password) < 7:
+            raise ValueError("Password length is too short")
+        if values.password != values.confirm_password:
+            raise ValueError("Passwords don't match")
+        return values
+    
+
+
 class RegisteredUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +66,24 @@ class RegisteredUser(BaseModel):
 class AccessToken(BaseModel):
     access_token: str
     token_type: str
+    reward_amount: int = 0
+
+
+class PredictedFixture(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: str
+    home_team: str
+    away_team: str
+    league: Optional[str] = None
+    status: Optional[str] = None
+    away_team_score: Optional[str] = None
+    home_team_score: Optional[str] = None
+    winner: Optional[str] = None
+    predicted_home_score: Optional[int] = None
+    predicted_away_score: Optional[int] = None
+    predicted_outcome: Optional[str] = None
 
 
 class ShopUnlockResponse(BaseModel):
@@ -359,6 +393,7 @@ class ChatMessageRead(BaseModel):
     username: str
     content: str
     created_at: datetime
+    reward_amount: int = 0
 
 
 class MatchCommentCreate(BaseModel):
@@ -374,6 +409,7 @@ class MatchCommentRead(BaseModel):
     username: str
     content: str
     created_at: datetime
+    reward_amount: int = 0
 
 
 class MatchSimulationStats(BaseModel):

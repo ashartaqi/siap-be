@@ -9,6 +9,7 @@ from app.models import User, RefreshToken, Club, Player, PlayerStats, Goalkeeper
 from app.constants import (
     TEAM_TOTAL_OVERALL_MAX, 
     CHAT_REWARD,
+    MATCH_COMMENT_REWARD,
     SHOP_PRICE_70_80,
     SHOP_PRICE_80_85,
     SHOP_PRICE_85_90,
@@ -72,7 +73,7 @@ def add_bb_reward(db: Session, user_id: int, amount: int):
         db.commit()
     return user
 
-def check_and_award_daily_login_reward(db: Session, user: User):
+def check_and_award_daily_login_reward(db: Session, user: User) -> int:
     try:
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         already_rewarded = db.query(RefreshToken).filter(
@@ -80,10 +81,13 @@ def check_and_award_daily_login_reward(db: Session, user: User):
             RefreshToken.created_at >= today_start,
         ).first()
         if not already_rewarded:
-            user.bb_balance = (user.bb_balance or 0) + DAILY_LOGIN_REWARD
+            reward = DAILY_LOGIN_REWARD
+            user.bb_balance = (user.bb_balance or 0) + reward
             db.flush()
+            return reward
     except Exception as e:
         print(f"Daily reward error: {e}")
+    return 0
 
 def rotate_refresh_token(db: Session, old_token_id: int, user_id: int, new_plain_token: str) -> RefreshToken:
     """Delete the old token and issue a new one atomically."""
@@ -111,14 +115,27 @@ def revoke_refresh_token(db: Session, plain_token: str) -> None:
     ).delete(synchronize_session=False)
     db.commit()
 
+
 def get_user_by_id(db: Session, user_id: int) -> User | None:
     return db.query(User).filter(User.id == user_id).first()
+
 
 def authenticate_user(db: Session, email: str, password: str):
     user = db.query(User).filter(User.email == email).first()
     if user and verify_password(password, user.password):
         return user
     return None
+
+
+def reset_user_password(db: Session, email: str, username: str, password: str):
+    user = db.query(User).filter(User.email == email, User.username == username).first()
+    if not user:
+        return None
+    user.password = get_password_hash(password)
+    db.commit()
+    db.refresh(user)
+    return user
+
 
 # TEAMS
 def get_teams(
@@ -159,6 +176,10 @@ def get_teams(
         query = query.filter(Club.defence >= min_defence)
 
     return query.order_by(desc(Club.overall)).offset(skip).limit(limit).all()
+
+
+def get_club_by_name(db: Session, name: str):
+    return db.query(Club).filter(Club.name == name).first()
 
 
 def add_fav_team(db: Session, user: int, team: int):
@@ -344,6 +365,16 @@ def get_fixtures(
         query = query.filter(Fixtures.date == date)
     
     return query.limit(limit).all()
+
+
+def get_upcoming_fixtures(db: Session, limit: int = 10) -> list:
+    return (
+        db.query(Fixtures)
+        .filter(Fixtures.status.in_(["SCHEDULED", "TIMED"]))
+        .order_by(Fixtures.date)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_standings(
@@ -603,6 +634,7 @@ def get_chat_messages(db: Session, limit: int = 50):
 
 def create_chat_message(db: Session, user_id: int, content: str):
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    reward = 0
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         first_today = not db.query(ChatMessage).filter(
@@ -610,11 +642,13 @@ def create_chat_message(db: Session, user_id: int, content: str):
             ChatMessage.created_at >= today_start,
         ).first()
         if first_today:
-            user.bb_balance += CHAT_REWARD
+            reward = CHAT_REWARD
+            user.bb_balance += reward
             db.flush()
 
     message = ChatMessage(user_id=user_id, content=content)
-    return create(db, message, "Error sending message")
+    db_message = create(db, message, "Error sending message")
+    return db_message, reward
 
 # MATCH COMMENTS
 def get_match_comments(db: Session, match_id: int):
@@ -628,13 +662,12 @@ def get_match_comments(db: Session, match_id: int):
 
 def create_match_comment(db: Session, user_id: int, match_id: int, content: str):
     comment = MatchComment(user_id=user_id, match_id=match_id, content=content)
-    
-    # Reward every 3 comments
-    count = db.query(MatchComment).filter(MatchComment.user_id == user_id).count()
-    if (count + 1) % 3 == 0:
-        add_bb_reward(db, user_id, 10)
-        
-    return create(db, comment, "Error posting comment")
+
+    reward = MATCH_COMMENT_REWARD
+    add_bb_reward(db, user_id, reward)
+
+    db_comment = create(db, comment, "Error posting comment")
+    return db_comment, reward
 
 
 

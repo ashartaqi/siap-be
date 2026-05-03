@@ -1,506 +1,328 @@
-"""
-match_score.py
-==============
-Regression model to predict match scores, with outcome derived from scores.
-
-Accuracy improvements over baseline:
-  1. LeagueStandings features  – points, GD, win-rate, goals-for/against
-  2. Rolling form              – last-5 avg goals scored/conceded per team
-  3. VotingRegressor ensemble  – HistGBR + RF + ExtraTrees averaged
-  4. Calibrated draw threshold – chosen from training distribution
-
-Run:
-    python3 -m app.ai_models.match_score           # train + predict
-    python3 -m app.ai_models.match_score --predict # predict only
-"""
-
-import json, os, sys
-from collections import defaultdict
-from typing import Optional
-
-import joblib
+import os
+import json
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import (
-    ExtraTreesRegressor,
-    HistGradientBoostingRegressor,
-    RandomForestRegressor,
-    VotingRegressor,
-)
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+import joblib
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, Input, Embedding, Flatten, Concatenate
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-
 from app.core.db import SessionLocal
-from app.models import Club, LeagueStandings, Match
+from app.models import Match, Club
 
-# ---------------------------------------------------------------------------
-COLUMNS     = ["team1", "team2", "winner", "team1_score", "team2_score",
-                 "league", "date"]
-LEAGUES      = ["en.1", "es.1", "de.1", "it.1", "fr.1"]
-MODELS_DIR   = os.path.join(os.path.dirname(__file__), "compiled_models")
-FORM_WINDOW  = 5        # rolling games for form features
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "compiled_models/match_score")
 
-FEATURE_COLS = [
-    # team identity
-    "team1_enc", "team2_enc",
-    # club ratings
+NUMERIC_FEATURES = [
     "team1_attack", "team1_mid", "team1_def", "team1_overall",
     "team2_attack", "team2_mid", "team2_def", "team2_overall",
-    # signed rating diffs
     "attack_diff", "mid_diff", "defense_diff", "overall_diff",
-    # league standings
-    "t1_points", "t1_gd", "t1_win_rate", "t1_goals_for", "t1_goals_against",
-    "t2_points", "t2_gd", "t2_win_rate", "t2_goals_for", "t2_goals_against",
-    "points_diff", "gd_diff",
-    # rolling form (last FORM_WINDOW games)
-    "t1_form_scored", "t1_form_conceded",
-    "t2_form_scored", "t2_form_conceded",
+    "t1_attack_vs_t2_def", "t2_attack_vs_t1_def",
 ]
 
-# Lazy inference cache
-_team_enc: Optional[LabelEncoder] = None
-_feature_scaler: Optional[StandardScaler] = None
-_reg_t1 = None
-_reg_t2 = None
-_meta: Optional[dict] = None  # stores draw_threshold + known_teams
+_t1_model = None
+_t2_model = None
+_feature_scaler = None
+_team_encoder = None
+_meta = None
 
 
-# ---------------------------------------------------------------------------
-# DB helpers
-# ---------------------------------------------------------------------------
-
-def _load_matches() -> pd.DataFrame:
+def load_data() -> pd.DataFrame:
+    """Load matches"""
     db = SessionLocal()
-    try:
-        rows = db.query(
-            Match.team1, Match.team2, Match.winner,
-            Match.team1_score, Match.team2_score,
-            Match.league, Match.date,
-        ).filter(Match.league.in_(LEAGUES)).all()
-    finally:
-        db.close()
-    return pd.DataFrame(rows, columns=COLUMNS)
+    matches = db.query(
+        Match.team1, Match.team2, Match.winner,
+        Match.team1_score, Match.team2_score,
+    ).filter(
+        Match.league.in_(["en.1", "es.1", "de.1", "it.1", "fr.1"])
+    ).all()
+    return pd.DataFrame(matches, columns=["team1", "team2", "winner", "team1_score", "team2_score"])
 
 
-def _load_clubs() -> pd.DataFrame:
+def load_clubs() -> pd.DataFrame:
+    """Load clubs"""
     db = SessionLocal()
-    try:
-        rows = db.query(
-            Club.name, Club.attack, Club.midfield,
-            Club.defence, Club.overall,
-        ).all()
-    finally:
-        db.close()
-    return (
-        pd.DataFrame(rows, columns=["name","attack","midfield","defence","overall"])
-        .drop_duplicates(subset=["name"])
-    )
+    clubs = db.query(Club.name, Club.attack, Club.midfield, Club.defence, Club.overall).all()
+    clubs_df = pd.DataFrame(clubs, columns=["name", "attack", "midfield", "defence", "overall"])
+    return clubs_df.drop_duplicates(subset=["name"])
 
 
-def _load_standings() -> pd.DataFrame:
-    db = SessionLocal()
-    try:
-        rows = db.query(
-            LeagueStandings.team_name,
-            LeagueStandings.points,
-            LeagueStandings.won,
-            LeagueStandings.draw,
-            LeagueStandings.lost,
-            LeagueStandings.goals_for,
-            LeagueStandings.goals_against,
-            LeagueStandings.goal_difference,
-            LeagueStandings.played_games,
-        ).all()
-    finally:
-        db.close()
-    df = pd.DataFrame(rows, columns=[
-        "team_name","points","won","draw","lost",
-        "goals_for","goals_against","goal_difference","played_games",
-    ])
-    # aggregate across seasons/leagues → take latest (max points is a proxy)
-    df = df.sort_values("points", ascending=False).drop_duplicates("team_name")
-    df["win_rate"] = df["won"] / df["played_games"].clip(lower=1)
-    return df.set_index("team_name")
-
-
-# ---------------------------------------------------------------------------
-# Feature engineering
-# ---------------------------------------------------------------------------
-
-def _build_rolling_form(df: pd.DataFrame) -> dict:
-    """
-    Return per-team rolling stats dict:
-        team -> { "scored": float, "conceded": float }
-    computed from all rows in df, sorted by date.
-    """
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna(subset=["date","team1_score","team2_score"])
-    df = df.sort_values("date")
-
-    history: dict[str, list] = defaultdict(list)
-    for _, r in df.iterrows():
-        for team, scored, conceded in [
-            (r["team1"], r["team1_score"], r["team2_score"]),
-            (r["team2"], r["team2_score"], r["team1_score"]),
-        ]:
-            history[team].append((float(scored), float(conceded)))
-
-    form = {}
-    for team, games in history.items():
-        last = games[-FORM_WINDOW:] if len(games) >= FORM_WINDOW else games
-        arr = np.array(last)
-        form[team] = {
-            "scored":    float(arr[:, 0].mean()),
-            "conceded":  float(arr[:, 1].mean()),
-        }
-    return form
-
-
-def add_features(df: pd.DataFrame, clubs_df: pd.DataFrame,
-                 standings: pd.DataFrame, form: dict) -> pd.DataFrame:
-    """Join all feature groups onto match rows."""
-    # --- club ratings ---
+def add_features(df: pd.DataFrame, clubs_df: pd.DataFrame) -> pd.DataFrame:
+    """Join club ratings and compute rating diffs"""
     df = (df.merge(clubs_df, left_on="team1", right_on="name", how="left")
             .drop(columns=["name"])
-            .rename(columns={"attack":"team1_attack","midfield":"team1_mid",
-                              "defence":"team1_def","overall":"team1_overall"}))
+            .rename(columns={"attack": "team1_attack", "midfield": "team1_mid",
+                             "defence": "team1_def", "overall": "team1_overall"}))
     df = (df.merge(clubs_df, left_on="team2", right_on="name", how="left")
             .drop(columns=["name"])
-            .rename(columns={"attack":"team2_attack","midfield":"team2_mid",
-                              "defence":"team2_def","overall":"team2_overall"}))
+            .rename(columns={"attack": "team2_attack", "midfield": "team2_mid",
+                             "defence": "team2_def", "overall": "team2_overall"}))
 
-    rating_cols = ["team1_attack","team1_mid","team1_def","team1_overall",
-                   "team2_attack","team2_mid","team2_def","team2_overall"]
+    rating_cols = ["team1_attack", "team1_mid", "team1_def", "team1_overall",
+                   "team2_attack", "team2_mid", "team2_def", "team2_overall"]
     df.dropna(subset=rating_cols, inplace=True)
     df[rating_cols] = df[rating_cols].astype(int)
 
-    df["attack_diff"]  = df["team1_attack"]  - df["team2_attack"]
-    df["mid_diff"]     = df["team1_mid"]      - df["team2_mid"]
-    df["defense_diff"] = df["team1_def"]      - df["team2_def"]
-    df["overall_diff"] = df["team1_overall"]  - df["team2_overall"]
+    df["attack_diff"] = df["team1_attack"] - df["team2_attack"]
+    df["mid_diff"] = df["team1_mid"] - df["team2_mid"]
+    df["defense_diff"] = df["team1_def"] - df["team2_def"]
+    df["overall_diff"] = df["team1_overall"] - df["team2_overall"]
 
-    # --- standings ---
-    def _std(team, col, default=0.0):
-        return float(standings.loc[team, col]) if team in standings.index else default
-
-    for prefix, team_col in [("t1", "team1"), ("t2", "team2")]:
-        df[f"{prefix}_points"]       = df[team_col].apply(lambda t: _std(t, "points"))
-        df[f"{prefix}_gd"]           = df[team_col].apply(lambda t: _std(t, "goal_difference"))
-        df[f"{prefix}_win_rate"]     = df[team_col].apply(lambda t: _std(t, "win_rate"))
-        df[f"{prefix}_goals_for"]    = df[team_col].apply(lambda t: _std(t, "goals_for"))
-        df[f"{prefix}_goals_against"]= df[team_col].apply(lambda t: _std(t, "goals_against"))
-
-    df["points_diff"] = df["t1_points"] - df["t2_points"]
-    df["gd_diff"]     = df["t1_gd"]     - df["t2_gd"]
-
-    # --- rolling form ---
-    def _form(team, key, default=1.2):
-        return form[team][key] if team in form else default
-
-    df["t1_form_scored"]   = df["team1"].apply(lambda t: _form(t, "scored"))
-    df["t1_form_conceded"] = df["team1"].apply(lambda t: _form(t, "conceded"))
-    df["t2_form_scored"]   = df["team2"].apply(lambda t: _form(t, "scored"))
-    df["t2_form_conceded"] = df["team2"].apply(lambda t: _form(t, "conceded"))
+    df["t1_attack_vs_t2_def"] = df["team1_attack"] - df["team2_def"]
+    df["t2_attack_vs_t1_def"] = df["team2_attack"] - df["team1_def"]
 
     return df.reset_index(drop=True)
 
 
-# ---------------------------------------------------------------------------
-# Outcome logic
-# ---------------------------------------------------------------------------
+def process_data(df: pd.DataFrame):
+    """Normalize and encode data"""
+    df = df.dropna(subset=["team1_score", "team2_score"]).copy()
 
-def _score_to_outcome(t1: float, t2: float, threshold: float = 0.5) -> str:
+    team_encoder = LabelEncoder()
+    team_encoder.fit(pd.concat([df["team1"], df["team2"]]).unique())
+    df["team1_id"] = team_encoder.transform(df["team1"])
+    df["team2_id"] = team_encoder.transform(df["team2"])
+
+    feature_scaler = StandardScaler()
+    df[NUMERIC_FEATURES] = feature_scaler.fit_transform(df[NUMERIC_FEATURES])
+
+    X_numeric = df[NUMERIC_FEATURES].values.astype("float32")
+    X_t1 = df["team1_id"].values.astype("int32")
+    X_t2 = df["team2_id"].values.astype("int32")
+    y_t1 = df["team1_score"].values.astype("float32")
+    y_t2 = df["team2_score"].values.astype("float32")
+
+    return X_numeric, X_t1, X_t2, y_t1, y_t2, team_encoder, feature_scaler
+
+
+def build_model(num_features, num_teams, embed_dim=8):
+    numeric_in = Input(shape=(num_features,), name="numeric")
+    t1_in = Input(shape=(1,), name="team1_id", dtype="int32")
+    t2_in = Input(shape=(1,), name="team2_id", dtype="int32")
+
+    team_embed = Embedding(num_teams, embed_dim, name="team_embed")
+    t1_vec = Flatten()(team_embed(t1_in))
+    t2_vec = Flatten()(team_embed(t2_in))
+
+    x = Concatenate()([numeric_in, t1_vec, t2_vec])
+    x = Dense(128, activation="relu")(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.1)(x)
+    x = Dense(64, activation="relu")(x)
+    x = BatchNormalization()(x)
+    x = Dense(32, activation="relu")(x)
+
+    out = Dense(1, activation="exponential")(x)
+
+    model = Model(inputs=[numeric_in, t1_in, t2_in], outputs=out)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+        loss=tf.keras.losses.Poisson(),
+        metrics=["mae", "mse"],
+    )
+    return model
+
+
+def train_one(name, num_features, num_teams, train_inputs, y_tr, val_inputs, y_te):
+    """Train one model"""
+    early_stop = EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True)
+    reduce_lr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=4, min_lr=1e-5)
+
+    model = build_model(num_features, num_teams)
+    model.fit(
+        train_inputs, y_tr,
+        validation_data=(val_inputs, y_te),
+        epochs=100,
+        batch_size=256,
+        callbacks=[early_stop, reduce_lr],
+        verbose=2,
+    )
+
+    preds = np.clip(model.predict(val_inputs, verbose=0).flatten(), 0, None)
+    mae = np.mean(np.abs(preds - y_te))
+    rmse = np.sqrt(np.mean((preds - y_te) ** 2))
+    print(f"\n--- {name} accuracy ---")
+    print(f"MAE : {mae:.4f}")
+    print(f"RMSE: {rmse:.4f}")
+    print(f"Pred range: [{preds.min():.2f}, {preds.max():.2f}]  mean={preds.mean():.2f}")
+
+    return model, preds, mae, rmse
+
+
+def score_to_outcome(t1, t2, threshold=0.5):
+    """Return 'win' (team1), 'loss' (team2), or 'draw' based on score diff vs threshold."""
     d = t1 - t2
-    if d > threshold: return "win"
-    if d < -threshold: return "loss"
+    if d > threshold:
+        return "win"
+    if d < -threshold:
+        return "loss"
     return "draw"
 
 
-def _calibrate_threshold(pred_t1, pred_t2, actual_t1, actual_t2) -> float:
-    """Grid-search the threshold that maximises outcome accuracy on training."""
-    best_t, best_acc = 0.3, 0.0
-    for t in np.arange(0.1, 1.5, 0.05):
-        preds = [_score_to_outcome(p1, p2, t) for p1, p2 in zip(pred_t1, pred_t2)]
-        actuals = [_score_to_outcome(a1, a2, 0.0) for a1, a2 in zip(actual_t1, actual_t2)]
+def calibrate_threshold(pred_t1, pred_t2, actual_t1, actual_t2):
+    """Grid-search the draw threshold that maximises outcome accuracy."""
+    best_t, best_acc = 0.1, 0.0
+    for t in np.arange(0.05, 1.5, 0.05):
+        preds = [score_to_outcome(p1, p2, t) for p1, p2 in zip(pred_t1, pred_t2)]
+        actuals = [score_to_outcome(a1, a2, 0.0) for a1, a2 in zip(actual_t1, actual_t2)]
         acc = sum(p == a for p, a in zip(preds, actuals)) / len(preds)
         if acc > best_acc:
             best_acc, best_t = acc, t
-    return round(best_t, 2)
+    return round(float(best_t), 2)
 
 
-# ---------------------------------------------------------------------------
-# Training
-# ---------------------------------------------------------------------------
+def compile_and_save_model():
+    """Compile and save models"""
+    matches = load_data()
+    clubs_df = load_clubs()
 
-def compile_model() -> None:
-    print("=" * 60)
-    print("STEP 1 — Loading data")
-    print("=" * 60)
+    df = add_features(matches, clubs_df)
+    X_num, X_t1, X_t2, y_t1, y_t2, team_encoder, feature_scaler = process_data(df)
 
-    df = _load_matches()
-    clubs_df = _load_clubs()
-    standings = _load_standings()
-    form = _build_rolling_form(df)
-
-    df = df[df["team1_score"].notna() & df["team2_score"].notna()].copy()
-    df = add_features(df, clubs_df, standings, form)
-    df = df.reset_index(drop=True)
-    print(f"  Usable rows: {len(df)}")
-
-    team_enc = LabelEncoder()
-    team_enc.fit(pd.concat([df["team1"], df["team2"]]))
-    df["team1_enc"] = team_enc.transform(df["team1"])
-    df["team2_enc"] = team_enc.transform(df["team2"])
-
-    X = df[FEATURE_COLS].values.astype(float)
-    y_t1 = df["team1_score"].values.astype(float)
-    y_t2 = df["team2_score"].values.astype(float)
-    idx = np.arange(len(X))
-
-    X_train, X_test, yt1_tr, yt1_te, yt2_tr, yt2_te, idx_tr, idx_te = train_test_split(
-        X, y_t1, y_t2, idx, test_size=0.20, random_state=42,
+    X_num_tr, X_num_te, X_t1_tr, X_t1_te, X_t2_tr, X_t2_te, yt1_tr, yt1_te, yt2_tr, yt2_te = train_test_split(
+        X_num, X_t1, X_t2, y_t1, y_t2, test_size=0.2, random_state=42
     )
-    print(f"  Train: {len(X_train)}  Test: {len(X_test)}")
 
-    scaler = StandardScaler()
-    Xtr = scaler.fit_transform(X_train)
-    Xte = scaler.transform(X_test)
+    num_features = X_num.shape[1]
+    num_teams = len(team_encoder.classes_)
+    train_inputs = [X_num_tr, X_t1_tr, X_t2_tr]
+    val_inputs = [X_num_te, X_t1_te, X_t2_te]
 
-    # --- ensemble ---
-    def _make_ensemble():
-        return VotingRegressor([
-            ("hgb", HistGradientBoostingRegressor(
-                max_iter=600, learning_rate=0.04, max_depth=6,
-                min_samples_leaf=20, l2_regularization=0.1, random_state=42)),
-            ("rf",  RandomForestRegressor(
-                n_estimators=300, max_depth=12, min_samples_leaf=10,
-                n_jobs=-1, random_state=42)),
-            ("et",  ExtraTreesRegressor(
-                n_estimators=300, max_depth=12, min_samples_leaf=10,
-                n_jobs=-1, random_state=42)),
-        ])
-
-    print("\n" + "=" * 60)
-    print("STEP 2 — Training team1_score regressor")
-    print("=" * 60)
-    reg_t1 = _make_ensemble()
-    reg_t1.fit(Xtr, yt1_tr)
-    pred_t1 = np.clip(reg_t1.predict(Xte), 0, None)
-    print(f"  MAE : {mean_absolute_error(yt1_te, pred_t1):.4f}")
-    print(f"  RMSE: {mean_squared_error(yt1_te, pred_t1)**0.5:.4f}")
-
-    print("\n" + "=" * 60)
-    print("STEP 3 — Training team2_score regressor")
-    print("=" * 60)
-    reg_t2 = _make_ensemble()
-    reg_t2.fit(Xtr, yt2_tr)
-    pred_t2 = np.clip(reg_t2.predict(Xte), 0, None)
-    print(f"  MAE : {mean_absolute_error(yt2_te, pred_t2):.4f}")
-    print(f"  RMSE: {mean_squared_error(yt2_te, pred_t2)**0.5:.4f}")
-
-    print("\n" + "=" * 60)
-    print("STEP 4 — Calibrating draw threshold")
-    print("=" * 60)
-    draw_thr = _calibrate_threshold(
-        reg_t1.predict(Xtr), reg_t2.predict(Xtr), yt1_tr, yt2_tr
+    # train two independent regressors
+    t1_model, pred_t1, t1_mae, t1_rmse = train_one(
+        "team1_score", num_features, num_teams, train_inputs, yt1_tr, val_inputs, yt1_te
     )
-    print(f"  Best threshold: {draw_thr}")
+    t2_model, pred_t2, t2_mae, t2_rmse = train_one(
+        "team2_score", num_features, num_teams, train_inputs, yt2_tr, val_inputs, yt2_te
+    )
 
-    actual_out = [_score_to_outcome(a, b, 0.0) for a, b in zip(yt1_te, yt2_te)]
-    pred_out = [_score_to_outcome(p, q, draw_thr) for p, q in zip(pred_t1, pred_t2)]
-    acc = sum(a == p for a, p in zip(actual_out, pred_out)) / len(actual_out)
-    print(f"  Outcome accuracy: {acc*100:.2f}%")
+    # calibrate draw threshold on TRAIN predictions (no leakage)
+    train_pred_t1 = np.clip(t1_model.predict(train_inputs, verbose=0).flatten(), 0, None)
+    train_pred_t2 = np.clip(t2_model.predict(train_inputs, verbose=0).flatten(), 0, None)
+    draw_thr = calibrate_threshold(train_pred_t1, train_pred_t2, yt1_tr, yt2_tr)
 
-    # --- save ---
-    print("\n" + "=" * 60)
-    print("STEP 5 — Saving artefacts")
-    print("=" * 60)
+    # combined accuracy: how often both rounded predictions match the actual scoreline
+    rounded_t1 = np.clip(np.round(pred_t1), 0, None)
+    rounded_t2 = np.clip(np.round(pred_t2), 0, None)
+    exact_match = np.mean((rounded_t1 == yt1_te) & (rounded_t2 == yt2_te))
+    within_1_both = np.mean((np.abs(rounded_t1 - yt1_te) <= 1) & (np.abs(rounded_t2 - yt2_te) <= 1))
+
+    # outcome accuracy with calibrated threshold
+    actual_outcomes = [score_to_outcome(a, b, 0.0) for a, b in zip(yt1_te, yt2_te)]
+    pred_outcomes = [score_to_outcome(p, q, draw_thr) for p, q in zip(pred_t1, pred_t2)]
+    outcome_acc = sum(a == p for a, p in zip(actual_outcomes, pred_outcomes)) / len(actual_outcomes)
+
+    print("\n" + "=" * 50)
+    print("OVERALL MODEL ACCURACY")
+    print("=" * 50)
+    print(f"team1 MAE / RMSE: {t1_mae:.3f} / {t1_rmse:.3f}")
+    print(f"team2 MAE / RMSE: {t2_mae:.3f} / {t2_rmse:.3f}")
+    print(f"Calibrated draw thresh: {draw_thr}")
+    print(f"Exact scoreline match: {exact_match * 100:.2f}%")
+    print(f"Both teams within ±1: {within_1_both * 100:.2f}%")
+    print(f"Outcome (W/D/L) accuracy: {outcome_acc * 100:.2f}%")
+    print("=" * 50)
+
+    # save models
     os.makedirs(MODELS_DIR, exist_ok=True)
-    joblib.dump(team_enc, os.path.join(MODELS_DIR, "match_team_enc.pkl"))
-    joblib.dump(scaler, os.path.join(MODELS_DIR, "match_feature_scaler.pkl"))
-    joblib.dump(reg_t1, os.path.join(MODELS_DIR, "match_score_reg_t1.pkl"))
-    joblib.dump(reg_t2, os.path.join(MODELS_DIR, "match_score_reg_t2.pkl"))
+    t1_model.save(os.path.join(MODELS_DIR, "score_model_t1.keras"))
+    t2_model.save(os.path.join(MODELS_DIR, "score_model_t2.keras"))
+    joblib.dump(feature_scaler, os.path.join(MODELS_DIR, "score_feature_scaler.pkl"))
+    joblib.dump(team_encoder, os.path.join(MODELS_DIR, "team_encoder.pkl"))
 
-    meta = {"draw_threshold": draw_thr, "known_teams": list(team_enc.classes_)}
+    meta = {
+        "team1_score": {"mae": round(float(t1_mae), 4), "rmse": round(float(t1_rmse), 4)},
+        "team2_score": {"mae": round(float(t2_mae), 4), "rmse": round(float(t2_rmse), 4)},
+        "draw_threshold": draw_thr,
+        "exact_scoreline_pct": round(float(exact_match) * 100, 2),
+        "within_1_both_pct": round(float(within_1_both) * 100, 2),
+        "outcome_accuracy_pct": round(float(outcome_acc) * 100, 2),
+        "known_teams": list(team_encoder.classes_),
+    }
     with open(os.path.join(MODELS_DIR, "match_meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
 
-    test_rows = df.iloc[idx_te].reset_index(drop=True)
-    pd.DataFrame({
-        "team1": test_rows["team1"],
-        "team2": test_rows["team2"],
-        "actual_t1": yt1_te, "actual_t2": yt2_te,
-        "pred_t1": np.round(pred_t1, 2), "pred_t2": np.round(pred_t2, 2),
-        "actual_outcome": actual_out,
-        "pred_outcome":   pred_out,
-    }).to_csv(os.path.join(MODELS_DIR, "match_test_predictions.csv"), index=False)
-
-    metrics = {
-        "split": {"train": int(len(X_train)), "test": int(len(X_test))},
-        "draw_threshold": draw_thr,
-        "team1_score": {
-            "mae":  round(mean_absolute_error(yt1_te, pred_t1), 4),
-            "rmse": round(mean_squared_error(yt1_te, pred_t1)**0.5, 4),
-        },
-        "team2_score": {
-            "mae":  round(mean_absolute_error(yt2_te, pred_t2), 4),
-            "rmse": round(mean_squared_error(yt2_te, pred_t2)**0.5, 4),
-        },
-        "outcome_accuracy_pct": round(acc * 100, 2),
-        "known_teams": list(team_enc.classes_),
-    }
-    with open(os.path.join(MODELS_DIR, "match_model_metrics.json"), "w") as f:
-        json.dump(metrics, f, indent=2)
-
-    print("  All artefacts saved.")
-    print("\n✅ Training complete.\n")
-
-
-# ---------------------------------------------------------------------------
-# Inference helpers
-# ---------------------------------------------------------------------------
 
 def _load_models():
-    global _team_enc, _feature_scaler, _reg_t1, _reg_t2, _meta
-    if _team_enc is None:
-        _team_enc = joblib.load(os.path.join(MODELS_DIR, "match_team_enc.pkl"))
-        _feature_scaler = joblib.load(os.path.join(MODELS_DIR, "match_feature_scaler.pkl"))
-        _reg_t1 = joblib.load(os.path.join(MODELS_DIR, "match_score_reg_t1.pkl"))
-        _reg_t2 = joblib.load(os.path.join(MODELS_DIR, "match_score_reg_t2.pkl"))
+    """Load models from disk"""
+    global _t1_model, _t2_model, _feature_scaler, _team_encoder, _meta
+    if _t1_model is None:
+        _t1_model = tf.keras.models.load_model(os.path.join(MODELS_DIR, "score_model_t1.keras"))
+        _t2_model = tf.keras.models.load_model(os.path.join(MODELS_DIR, "score_model_t2.keras"))
+        _feature_scaler = joblib.load(os.path.join(MODELS_DIR, "score_feature_scaler.pkl"))
+        _team_encoder = joblib.load(os.path.join(MODELS_DIR, "team_encoder.pkl"))
         with open(os.path.join(MODELS_DIR, "match_meta.json")) as f:
             _meta = json.load(f)
 
 
-def _standings_for(team: str, standings: pd.DataFrame) -> dict:
-    if team in standings.index:
-        r = standings.loc[team]
-        return {
-            "points": float(r["points"]),
-            "gd": float(r["goal_difference"]),
-            "win_rate": float(r["win_rate"]),
-            "goals_for": float(r["goals_for"]),
-            "goals_against": float(r["goals_against"]),
-        }
-    return {"points": 0, "gd": 0, "win_rate": 0, "goals_for": 0, "goals_against": 0}
+def _build_feature_row(t1_stats, t2_stats):
+    """Build feature row"""
+    row = {
+        "team1_attack": t1_stats["attack"], "team1_mid": t1_stats["midfield"],
+        "team1_def": t1_stats["defence"], "team1_overall": t1_stats["overall"],
+        "team2_attack": t2_stats["attack"], "team2_mid": t2_stats["midfield"],
+        "team2_def": t2_stats["defence"], "team2_overall": t2_stats["overall"],
+        "attack_diff": t1_stats["attack"] - t2_stats["attack"],
+        "mid_diff": t1_stats["midfield"] - t2_stats["midfield"],
+        "defense_diff": t1_stats["defence"] - t2_stats["defence"],
+        "overall_diff": t1_stats["overall"] - t2_stats["overall"],
+        "t1_attack_vs_t2_def": t1_stats["attack"] - t2_stats["defence"],
+        "t2_attack_vs_t1_def": t2_stats["attack"] - t1_stats["defence"],
+    }
+    return pd.DataFrame([row])[NUMERIC_FEATURES]
 
 
-def _form_for(team: str, form: dict) -> dict:
-    return form.get(team, {"scored": 1.2, "conceded": 1.2})
-
-
-# ---------------------------------------------------------------------------
-# Public predict API
-# ---------------------------------------------------------------------------
-
-def predict_match(
-    team1: str, team2: str,
-    team1_attack: int, team1_mid: int, team1_def: int, team1_overall: int,
-    team2_attack: int, team2_mid: int, team2_def: int, team2_overall: int,
-) -> dict:
-    """
-    Predict match result.  Outcome is derived from predicted scores.
-
-    Returns dict with team1_score_pred, team2_score_pred,
-    outcome ('win'/'draw'/'loss' for team1), score_diff.
-    """
+def predict_match(team1, team2, t1_stats: dict, t2_stats: dict):
+    """Predict using two independent models"""
     _load_models()
 
-    known = set(_team_enc.classes_)
-    for name, role in [(team1, "team1"), (team2, "team2")]:
-        if name not in known:
-            raise ValueError(f"Unknown team '{name}' ({role}). Re-train to include it.")
+    feat_df = _build_feature_row(t1_stats, t2_stats)
+    feat_scaled = _feature_scaler.transform(feat_df).astype("float32")
+    t1_id = np.array([_team_encoder.transform([team1])[0]], dtype="int32")
+    t2_id = np.array([_team_encoder.transform([team2])[0]], dtype="int32")
 
-    standings = _load_standings()
-    form = _build_rolling_form(_load_matches())
-    draw_thr = _meta["draw_threshold"]
+    inputs = [feat_scaled, t1_id, t2_id]
+    t1_raw = float(np.clip(_t1_model.predict(inputs, verbose=0).flatten()[0], 0, None))
+    t2_raw = float(np.clip(_t2_model.predict(inputs, verbose=0).flatten()[0], 0, None))
 
-    s1 = _standings_for(team1, standings)
-    s2 = _standings_for(team2, standings)
-    f1 = _form_for(team1, form)
-    f2 = _form_for(team2, form)
-
-    X = np.array([[
-        _team_enc.transform([team1])[0],
-        _team_enc.transform([team2])[0],
-        team1_attack, team1_mid, team1_def, team1_overall,
-        team2_attack, team2_mid, team2_def, team2_overall,
-        team1_attack - team2_attack,
-        team1_mid - team2_mid,
-        team1_def - team2_def,
-        team1_overall - team2_overall,
-        s1["points"], s1["gd"], s1["win_rate"], s1["goals_for"], s1["goals_against"],
-        s2["points"], s2["gd"], s2["win_rate"], s2["goals_for"], s2["goals_against"],
-        s1["points"] - s2["points"],
-        s1["gd"] - s2["gd"],
-        f1["scored"], f1["conceded"],
-        f2["scored"], f2["conceded"],
-    ]], dtype=float)
-
-    X_sc = _feature_scaler.transform(X)
-    t1 = float(max(0.0, round(float(_reg_t1.predict(X_sc)[0]), 2)))
-    t2 = float(max(0.0, round(float(_reg_t2.predict(X_sc)[0]), 2)))
+    draw_thr = _meta.get("draw_threshold", 0.3)
+    outcome = score_to_outcome(t1_raw, t2_raw, draw_thr)
 
     return {
-        "team1_score_pred": t1,
-        "team2_score_pred": t2,
-        "outcome":  _score_to_outcome(t1, t2, draw_thr),
-        "score_diff": round(t1 - t2, 2),
+        "team1_score_pred": round(t1_raw, 2),
+        "team2_score_pred": round(t2_raw, 2),
+        "team1_score_rounded": max(0, round(t1_raw)),
+        "team2_score_rounded": max(0, round(t2_raw)),
+        "score_diff": round(t1_raw - t2_raw, 2),
+        "outcome": outcome,
     }
 
 
-# ---------------------------------------------------------------------------
-# Sample demo
-# ---------------------------------------------------------------------------
-
-def run_sample_predictions() -> None:
-    print("\n" + "=" * 70)
-    print("SAMPLE PREDICTIONS")
-    print("=" * 70)
-
-    db = SessionLocal()
-    try:
-        rows = db.query(Club.name, Club.attack, Club.midfield,
-                        Club.defence, Club.overall).join(
-            Match, (Match.team1 == Club.name) | (Match.team2 == Club.name)
-        ).filter(
-            Match.league.in_(LEAGUES),
-            Club.attack.isnot(None),
-        ).distinct().limit(20).all()
-    finally:
-        db.close()
-
-    if len(rows) < 2:
-        print("Not enough clubs in DB.")
-        return
-
-    clubs = {r.name: {"attack": int(r.attack), "mid": int(r.midfield),
-                      "def": int(r.defence), "overall": int(r.overall)}
-             for r in rows}
-    names = list(clubs.keys())
-    fixtures = [(names[i], names[i+1]) for i in range(0, min(len(names)-1, 10), 2)]
-
-    print(f"\n{'#':<4} {'Home':<25} {'Away':<25} {'Score':>9}  {'Outcome':<7}  {'Diff':>6}")
-    print("-" * 80)
-    for i, (home, away) in enumerate(fixtures, 1):
-        h, a = clubs[home], clubs[away]
-        try:
-            r = predict_match(home, away,
-                h["attack"], h["mid"], h["def"], h["overall"],
-                a["attack"], a["mid"], a["def"], a["overall"])
-            score = f"{r['team1_score_pred']:.1f} - {r['team2_score_pred']:.1f}"
-            print(f"{i:<4} {home:<25} {away:<25} {score:>9}  "
-                  f"{r['outcome']:<7}  {r['score_diff']:>+.2f}")
-        except ValueError as e:
-            print(f"{i:<4} {home:<25} {away:<25}  SKIPPED — {e}")
-    print()
-
-
-# ---------------------------------------------------------------------------
+# python3 -m app.ai_models.match_score
 if __name__ == "__main__":
-    if "--predict" in sys.argv:
-        run_sample_predictions()
-    else:
-        compile_model()
-        run_sample_predictions()
+    # compile_and_save_model()
+
+    def print_predictions(team1_name: str, team2_name: str):
+        db = SessionLocal()
+        team1 = db.query(Club).filter(Club.name == team1_name).first()
+        team2 = db.query(Club).filter(Club.name == team2_name).first()
+
+        result = predict_match(
+            team1.name, team2.name,
+            {"attack": team1.attack, "midfield": team1.midfield,
+            "defence": team1.defence, "overall": team1.overall},
+            {"attack": team2.attack, "midfield": team2.midfield,
+            "defence": team2.defence, "overall": team2.overall},
+        )
+
+        print("\n--- Match Prediction ---")
+        print(f"{team1.name:<20} {result['team1_score_rounded']} - {result['team2_score_rounded']}  {team2.name}")
+        print(f"Raw expected goals:  {result['team1_score_pred']:.2f} - {result['team2_score_pred']:.2f}")
+        print(f"Outcome: {result['outcome']}")
+
+
+    print_predictions("Bayern", "Real Madrid")
+    print_predictions("Man City", "Arsenal")
+    print_predictions("Liverpool", "Man United")
+    print_predictions("Real Madrid", "Barça")

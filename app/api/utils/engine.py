@@ -1,6 +1,11 @@
 import random
 from dataclasses import dataclass, field
-from app.constants import POSITION_GROUPS
+from app.constants import (
+    POSITION_GROUPS,
+    BATTLE_PARTICIPATION_REWARD,
+    BATTLE_WIN_REWARD,
+    BATTLE_DRAW_REWARD,
+)
 
 
 @dataclass
@@ -175,3 +180,67 @@ def map_team_to_engine(team, team_name: str) -> EngineTeam:
             ))
 
     return EngineTeam(name=team_name, players=engine_players)
+
+def avg(attr, all_players):
+            vals = [getattr(p, attr, 0) for p in all_players]
+            return sum(vals) / len(vals) if vals else 50
+
+def to_player_dict(team) -> dict:
+        slots = team.slots
+        all_players = [s.player for s in slots if s.player]
+        return {
+            "shooting":  avg("shooting", all_players),
+            "pace":      avg("pace", all_players),
+            "dribbling": avg("dribbling", all_players),
+            "defending": avg("defending", all_players),
+            "physical":  avg("physic", all_players),
+            "overall":   avg("overall", all_players),
+            "position":  slots[0].position if slots else "CM",
+        }
+
+def attack_score(p):
+    return 0.30 * p["shooting"] + 0.25 * p["pace"] + 0.25 * p["dribbling"] + 0.20 * p["overall"]    
+
+def defense_score(p):
+    return 0.40 * p["defending"] + 0.30 * p["physical"] + 0.30 * p["overall"]   
+
+def position_bonus(p):
+    pos = p["position"]
+    if pos in ["ST", "CF", "LW", "RW"]:
+        return {"attack": 1.1, "defense": 0.9}
+    elif pos in ["CM", "CAM", "CDM"]:
+        return {"attack": 1.0, "defense": 1.0}
+    elif pos in ["CB", "LB", "RB"]:
+        return {"attack": 0.85, "defense": 1.15}
+    elif pos == "GK":
+        return {"attack": 0.3, "defense": 1.5}
+    else:
+        return {"attack": 1.0, "defense": 1.0}    
+
+def simulate_player_match(my_team, opp_team, my_name, opp_name):
+    p1 = to_player_dict(my_team)
+    p2 = to_player_dict(opp_team)
+
+    b1, b2 = position_bonus(p1), position_bonus(p2)
+    p1_attack = attack_score(p1) * b1["attack"]
+    p1_def = defense_score(p1) * b1["defense"]
+    p2_attack = attack_score(p2) * b2["attack"]
+    p2_def = defense_score(p2) * b2["defense"]
+
+    score1, score2, log = 0, 0, []
+    for minute in range(10):
+        if p1_attack * random.uniform(0.8, 1.2) > p2_def * random.uniform(0.8, 1.2):
+            score1 += 1
+            log.append(f"{my_name} scores at chance {minute + 1}")
+        if p2_attack * random.uniform(0.8, 1.2) > p1_def * random.uniform(0.8, 1.2):
+            score2 += 1
+            log.append(f"{opp_name} scores at chance {minute + 1}")
+
+    if score1 > score2:
+        winner, reward = "me", BATTLE_PARTICIPATION_REWARD + BATTLE_WIN_REWARD
+    elif score2 > score1:
+        winner, reward = "opponent", BATTLE_PARTICIPATION_REWARD
+    else:
+        winner, reward = "draw", BATTLE_PARTICIPATION_REWARD + BATTLE_DRAW_REWARD
+
+    return score1, score2, log, winner, reward, p1_attack, p2_attack
