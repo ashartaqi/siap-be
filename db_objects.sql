@@ -1,33 +1,4 @@
--- ============================================================
--- SIAP: Database Views & Stored Procedures
--- Source: app/crud.py + app/models.py
--- ============================================================
--- Constants inlined from app/constants.py:
---   FREE_PLAYER_CAP        = 70
---   TEAM_TOTAL_OVERALL_MAX = 1000
---   DAILY_LOGIN_REWARD     = 5
---   CHAT_REWARD            = 20
---   MATCH_COMMENT_REWARD   = 10
---   SHOP_PRICE_70_80       = 30
---   SHOP_PRICE_80_85       = 40
---   SHOP_PRICE_85_90       = 50
---   SHOP_PRICE_90_PLUS     = 100
--- ============================================================
-
-
--- ============================================================
--- VIEWS (complex reads)
--- ============================================================
-
--- ------------------------------------------------------------
--- 1. v_players_with_stats
--- Full player row with club name, outfield stats, goalkeeper
--- stats, and positions aggregated into an array.
--- Mirrors the joinedload(Player.player_stats, .positions,
--- .goalkeeper_stats) pattern in get_players().
--- Dynamic filters (name, position, overall, age, unlock_status,
--- stat ordering) are applied on top of this view at query time.
--- ------------------------------------------------------------
+-- 1.
 CREATE OR REPLACE VIEW v_players_with_stats AS
 SELECT
     p.id,
@@ -44,7 +15,7 @@ SELECT
     p.skill_moves,
     p.work_rate,
     p.player_face_url,
-    c.name                                                              AS club_name,
+    c.name AS club_name,
     -- outfield stats (NULL for GKs)
     ps.pace,
     ps.shooting,
@@ -61,7 +32,7 @@ SELECT
     gs.speed,
     -- all registered positions collapsed into an array
     ARRAY_AGG(DISTINCT pp.position)
-        FILTER (WHERE pp.position IS NOT NULL)                         AS positions
+        FILTER (WHERE pp.position IS NOT NULL) AS positions
 FROM players          p
 LEFT JOIN club           c  ON c.id         = p.club_team_id
 LEFT JOIN player_stats   ps ON ps.player_id = p.id
@@ -74,31 +45,52 @@ GROUP BY
     gs.diving, gs.handling, gs.kicking, gs.positioning, gs.reflexes, gs.speed;
 
 
--- ------------------------------------------------------------
--- 2. Per-user unlock status — inline query pattern
--- The per-user is_unlocked flag is computed inline in get_players()
--- rather than via a stored function. RETURNS TABLE with pvs.* caused
--- column-type mismatches across PostgreSQL versions.
---
--- Equivalent ad-hoc query for reference:
---   SELECT pvs.*,
---          (pvs.overall < 70 OR up.player_id IS NOT NULL) AS is_unlocked
---   FROM v_players_with_stats pvs
---   LEFT JOIN unlocked_players up
---       ON up.player_id = pvs.id AND up.user_id = $1
---   WHERE 'ST' = ANY(positions)
---   ORDER BY overall DESC
---   LIMIT 100;
--- ------------------------------------------------------------
+-- 2.
+CREATE OR REPLACE FUNCTION fn_players_for_user(p_user_id INT)
+RETURNS TABLE (
+    id INT,
+    short_name TEXT,
+    long_name TEXT,
+    overall INT,
+    dob TIMESTAMP,
+    height_cm INT,
+    weight_kg INT,
+    club_team_id INT,
+    nationality_name TEXT,
+    preferred_foot TEXT,
+    weak_foot INT,
+    skill_moves INT,
+    work_rate TEXT,
+    player_face_url TEXT,
+    club_name TEXT,
+    pace INT,
+    shooting INT,
+    passing INT,
+    dribbling INT,
+    defending INT,
+    physic INT,
+    diving INT,
+    handling INT,
+    kicking INT,
+    positioning INT,
+    reflexes INT,
+    speed INT,
+    positions TEXT[],
+    is_unlocked BOOLEAN
+)
+LANGUAGE sql STABLE AS $$
+    SELECT
+        pvs.*,
+        (pvs.overall < 70 OR up.player_id IS NOT NULL) AS is_unlocked
+    FROM v_players_with_stats pvs
+    LEFT JOIN unlocked_players up
+        ON up.player_id = pvs.id
+       AND up.user_id   = p_user_id
+    ORDER BY pvs.overall DESC;
+$$;
 
 
--- ------------------------------------------------------------
--- 3. v_standings_with_form
--- League standings with each team's form history.
--- Mirrors: get_standings() — subquery + outerjoin +
---   contains_eager(LeagueStandings.forms) + order_by(position, form.id DESC)
--- Pagination/filtering (league, team_name, limit) applied at query time.
--- ------------------------------------------------------------
+-- 3.
 CREATE OR REPLACE VIEW v_standings_with_form AS
 SELECT
     ls.id,
@@ -114,19 +106,14 @@ SELECT
     ls.goal_difference,
     ls.league,
     ls.logo_url,
-    f.id      AS form_id,
+    f.id AS form_id,
     f.outcome AS form_outcome
 FROM league_standings ls
 LEFT JOIN form f ON f.league_standing_id = ls.id
 ORDER BY ls.position ASC, f.id DESC;
 
 
--- ------------------------------------------------------------
--- 4. v_votes_with_users
--- Every vote annotated with the voter's username / first_name.
--- Mirrors: get_votes_with_users(db, fixture_id, limit)
--- Filter by fixture_id and apply LIMIT at query time.
--- ------------------------------------------------------------
+-- 4.
 CREATE OR REPLACE VIEW v_votes_with_users AS
 SELECT
     v.id,
@@ -140,12 +127,7 @@ FROM votes v
 JOIN users u ON u.id = v.user_id;
 
 
--- ------------------------------------------------------------
--- 5. v_fav_players
--- Each user's favourite players with full stats.
--- Mirrors: get_fav_players(db, user_id)
--- Filter: WHERE user_id = $1
--- ------------------------------------------------------------
+-- 5.
 CREATE OR REPLACE VIEW v_fav_players AS
 SELECT
     fp.user_id,
@@ -154,12 +136,7 @@ FROM favourite_players   fp
 JOIN v_players_with_stats pvs ON pvs.id = fp.player_id;
 
 
--- ------------------------------------------------------------
--- 6. v_fav_teams
--- Each user's favourite clubs.
--- Mirrors: get_fav_teams(db, user_id)
--- Filter: WHERE user_id = $1
--- ------------------------------------------------------------
+-- 6.
 CREATE OR REPLACE VIEW v_fav_teams AS
 SELECT
     fc.user_id,
@@ -168,12 +145,7 @@ FROM favourite_clubs fc
 JOIN club c ON c.id = fc.club_id;
 
 
--- ------------------------------------------------------------
--- 7. v_chat_messages_with_users
--- Chat messages in chronological order with author info.
--- Mirrors: get_chat_messages() — joinedload(ChatMessage.user) +
---   order_by(desc).limit then reversed in Python
--- ------------------------------------------------------------
+-- 7.
 CREATE OR REPLACE VIEW v_chat_messages_with_users AS
 SELECT
     cm.id,
@@ -187,12 +159,7 @@ JOIN users u ON u.id = cm.user_id
 ORDER BY cm.created_at ASC;
 
 
--- ------------------------------------------------------------
--- 8. v_match_comments_with_users
--- Match comments newest-first with author info.
--- Mirrors: get_match_comments(db, match_id) — joinedload(MatchComment.user)
--- Filter: WHERE match_id = $1
--- ------------------------------------------------------------
+-- 8.
 CREATE OR REPLACE VIEW v_match_comments_with_users AS
 SELECT
     mc.id,
@@ -207,41 +174,30 @@ JOIN users u ON u.id = mc.user_id
 ORDER BY mc.created_at DESC;
 
 
--- ------------------------------------------------------------
--- 9. v_dream_team_full
--- A user's complete dream team: header + every slot expanded
--- with key player fields.
--- Mirrors: get_dream_team() with DreamTeamSlot.player lazy="joined"
--- Filter: WHERE user_id = $1
--- ------------------------------------------------------------
+-- 9.
 CREATE OR REPLACE VIEW v_dream_team_full AS
 SELECT
-    dt.id            AS dream_team_id,
+    dt.id AS dream_team_id,
     dt.user_id,
     dt.formation,
     dt.total_score,
-    dts.id           AS slot_id,
-    dts.position     AS slot_position,
-    dts.row          AS slot_row,
-    dts.col          AS slot_col,
+    dts.id AS slot_id,
+    dts.position AS slot_position,
+    dts.row AS slot_row,
+    dts.col AS slot_col,
     dts.player_id,
-    p.short_name     AS player_short_name,
-    p.long_name      AS player_long_name,
-    p.overall        AS player_overall,
+    p.short_name AS player_short_name,
+    p.long_name AS player_long_name,
+    p.overall AS player_overall,
     p.player_face_url,
     p.nationality_name,
     p.preferred_foot
-FROM dream_team      dt
+FROM dream_team dt
 JOIN dream_team_slot dts ON dts.dream_team_id = dt.id
-JOIN players         p   ON p.id              = dts.player_id;
+JOIN players p   ON p.id = dts.player_id;
 
 
--- ------------------------------------------------------------
--- 10. v_battle_eligible_users
--- Users who own a dream team or a custom player (battle candidates).
--- Mirrors: get_battle_users_from_db() set-union logic
--- Exclude the calling user with: WHERE id <> $1
--- ------------------------------------------------------------
+-- 10.
 CREATE OR REPLACE VIEW v_battle_eligible_users AS
 SELECT DISTINCT
     u.id,
@@ -249,24 +205,18 @@ SELECT DISTINCT
     u.first_name,
     u.last_name,
     u.bb_balance,
-    (dt.user_id IS NOT NULL)  AS has_dream_team,
-    (cp.user_id IS NOT NULL)  AS has_custom_player
+    (dt.user_id IS NOT NULL) AS has_dream_team,
+    (cp.user_id IS NOT NULL) AS has_custom_player
 FROM users u
-LEFT JOIN dream_team    dt ON dt.user_id = u.id
+LEFT JOIN dream_team dt ON dt.user_id = u.id
 LEFT JOIN custom_players cp ON cp.user_id = u.id
 WHERE dt.user_id IS NOT NULL
    OR cp.user_id IS NOT NULL;
 
 
--- ============================================================
--- STORED PROCEDURES & FUNCTIONS (complex writes)
--- ============================================================
+-- Stored Procedures
 
--- ------------------------------------------------------------
--- 1. get_unlock_price(p_overall)
--- Pure helper: returns the BB cost to unlock a player.
--- Mirrors: get_unlock_price() in crud.py
--- ------------------------------------------------------------
+-- 1.
 CREATE OR REPLACE FUNCTION get_unlock_price(p_overall INT)
 RETURNS INT
 LANGUAGE plpgsql IMMUTABLE AS $$
@@ -280,20 +230,12 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 2. sp_rotate_refresh_token
--- Deletes the specified token, purges all expired tokens for the
--- user, then inserts the new hashed token in one transaction.
--- Mirrors: rotate_refresh_token()
---
--- p_new_token_hash : already-hashed token (caller does the hash)
--- p_expires_at     : NOW() + 7 days, computed by caller
--- ------------------------------------------------------------
+-- 2.
 CREATE OR REPLACE PROCEDURE sp_rotate_refresh_token(
-    p_old_token_id   INT,
-    p_user_id        INT,
+    p_old_token_id INT,
+    p_user_id INT,
     p_new_token_hash TEXT,
-    p_expires_at     TIMESTAMPTZ
+    p_expires_at TIMESTAMPTZ
 )
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -311,19 +253,13 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 3. fn_check_and_award_daily_login(p_user_id)
--- Awards DAILY_LOGIN_REWARD (5 BB) if the user has not received
--- it today (detected via a refresh_token row created today).
--- Returns the reward granted (0 if already rewarded).
--- Mirrors: check_and_award_daily_login_reward()
--- ------------------------------------------------------------
+-- 3.
 CREATE OR REPLACE FUNCTION fn_check_and_award_daily_login(p_user_id INT)
 RETURNS INT
 LANGUAGE plpgsql AS $$
 DECLARE
     v_today  TIMESTAMP := DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC');
-    v_reward INT       := 5; -- DAILY_LOGIN_REWARD
+    v_reward INT := 5; -- DAILY_LOGIN_REWARD
 BEGIN
     IF EXISTS (
         SELECT 1 FROM refresh_token
@@ -339,21 +275,15 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 4. sp_unlock_player(p_user_id, p_player_id)
--- Validates the unlock (not already unlocked, player exists,
--- sufficient BB), deducts the price, and records the unlock.
--- Raises on any violation so the caller can surface the error.
--- Mirrors: unlock_player()
--- ------------------------------------------------------------
+-- 4.
 CREATE OR REPLACE PROCEDURE sp_unlock_player(
-    p_user_id   INT,
+    p_user_id INT,
     p_player_id INT
 )
 LANGUAGE plpgsql AS $$
 DECLARE
     v_overall INT;
-    v_price   INT;
+    v_price INT;
     v_balance INT;
 BEGIN
     IF EXISTS (
@@ -385,26 +315,16 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 5. sp_create_dream_team(p_user_id, p_formation, p_slots)
--- Validates that exactly 11 slots are provided, all player IDs
--- exist, and the sum of overalls does not exceed
--- TEAM_TOTAL_OVERALL_MAX (1000). Then inserts the DreamTeam
--- header and all 11 DreamTeamSlot rows.
--- Mirrors: create_dream_team() + _validate_dream_team_slots()
---
--- p_slots JSONB format (array of 11 objects):
---   [{"position":"ST","row":0,"col":0,"player_id":123}, ...]
--- ------------------------------------------------------------
+-- 5.
 CREATE OR REPLACE PROCEDURE sp_create_dream_team(
-    p_user_id   INT,
+    p_user_id INT,
     p_formation TEXT,
-    p_slots     JSONB
+    p_slots JSONB
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_slot    JSONB;
-    v_total   INT := 0;
+    v_slot JSONB;
+    v_total INT := 0;
     v_overall INT;
     v_team_id INT;
 BEGIN
@@ -446,22 +366,16 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 6. sp_update_dream_team(p_user_id, p_formation, p_slots)
--- Same validation as sp_create_dream_team, but replaces an
--- existing team: updates the header, deletes old slots, inserts
--- the new set.
--- Mirrors: update_dream_team() + _validate_dream_team_slots()
--- ------------------------------------------------------------
+-- 6.
 CREATE OR REPLACE PROCEDURE sp_update_dream_team(
-    p_user_id   INT,
+    p_user_id INT,
     p_formation TEXT,
-    p_slots     JSONB
+    p_slots JSONB
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_slot    JSONB;
-    v_total   INT := 0;
+    v_slot JSONB;
+    v_total INT := 0;
     v_overall INT;
     v_team_id INT;
 BEGIN
@@ -510,16 +424,10 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 7. sp_update_dream_team_slot(p_user_id, p_slot_id, p_player_id)
--- Verifies team ownership and slot membership, swaps the player
--- in the slot, then recalculates the team's average total_score
--- from all current slot overalls.
--- Mirrors: update_dream_team_slot()
--- ------------------------------------------------------------
+-- 7.
 CREATE OR REPLACE PROCEDURE sp_update_dream_team_slot(
-    p_user_id   INT,
-    p_slot_id   INT,
+    p_user_id INT,
+    p_slot_id INT,
     p_player_id INT
 )
 LANGUAGE plpgsql AS $$
@@ -559,13 +467,7 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 8. fn_create_chat_message(p_user_id, p_content)
--- Awards CHAT_REWARD (20 BB) on the user's first chat message
--- of the calendar day, then inserts the message.
--- Returns: (message_id INT, reward INT)
--- Mirrors: create_chat_message()
--- ------------------------------------------------------------
+-- 8.
 CREATE OR REPLACE FUNCTION fn_create_chat_message(
     p_user_id INT,
     p_content TEXT
@@ -573,9 +475,9 @@ CREATE OR REPLACE FUNCTION fn_create_chat_message(
 RETURNS TABLE(message_id INT, reward INT)
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_today   TIMESTAMP := DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC');
-    v_reward  INT       := 0;
-    v_msg_id  INT;
+    v_today TIMESTAMP := DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC');
+    v_reward INT       := 0;
+    v_msg_id INT;
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM chat_messages
@@ -595,17 +497,11 @@ END;
 $$;
 
 
--- ------------------------------------------------------------
--- 9. fn_create_match_comment(p_user_id, p_match_id, p_content)
--- Awards MATCH_COMMENT_REWARD (10 BB) per comment, then inserts
--- the comment row.
--- Returns: (comment_id INT, reward INT)
--- Mirrors: create_match_comment()
--- ------------------------------------------------------------
+-- 9.
 CREATE OR REPLACE FUNCTION fn_create_match_comment(
-    p_user_id  INT,
+    p_user_id INT,
     p_match_id INT,
-    p_content  TEXT
+    p_content TEXT
 )
 RETURNS TABLE(comment_id INT, reward INT)
 LANGUAGE plpgsql AS $$
