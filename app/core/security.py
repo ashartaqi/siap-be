@@ -6,7 +6,6 @@ import secrets
 import hashlib
 from pwdlib import PasswordHash
 from datetime import datetime, timedelta, timezone
-from jwt.exceptions import InvalidTokenError
 from typing import Annotated
 from app.core.config import settings
 from app.api.deps import get_db
@@ -33,6 +32,15 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+
+def decode_access_token(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload.get("sub")
+    except Exception:
+        return None
+
+
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -40,12 +48,8 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Se
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except InvalidTokenError:
+    email = decode_access_token(token)
+    if email is None:
         raise credentials_exception
 
     user = db.query(User).filter(User.email == email).first()

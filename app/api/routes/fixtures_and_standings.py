@@ -29,11 +29,12 @@ def get_fixtures(
     status_filter: str = None,
     home_team: str = None,
     away_team: str = None,
-    date: str = None
+    date: str = None,
+    team: str = None,
 ):
     try:
         fixtures = crud.get_fixtures(
-            db, limit, league, status_filter, home_team, away_team, date
+            db, limit, league, status_filter, home_team, away_team, date, team
         )
         return fixtures
     except Exception as e:
