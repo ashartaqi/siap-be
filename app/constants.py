@@ -9,6 +9,24 @@ FIXTURE_LEAGUES = [
     {"key": "CL", "label": "Champions League", "badge": "CL"},
 ]
 
+# BB Currency
+INITIAL_BB_BALANCE = 100
+DAILY_LOGIN_REWARD = 5
+CHAT_REWARD = 20
+MATCH_COMMENT_REWARD = 10
+BATTLE_PARTICIPATION_REWARD = 10
+BATTLE_WIN_REWARD = 40
+BATTLE_DRAW_REWARD = 10
+
+# Players below this overall are always unlocked for free
+FREE_PLAYER_CAP = 70
+
+# Shop Prices
+SHOP_PRICE_70_80 = 30
+SHOP_PRICE_80_85 = 40
+SHOP_PRICE_85_90 = 50
+SHOP_PRICE_90_PLUS = 100
+
 # Player Positions
 
 VALID_PLAYER_POSITIONS = {
@@ -30,11 +48,34 @@ VALID_PREFERRED_FEET = ["Left", "Right"]
 # Player Stat Limits
 PLAYER_STAT_MIN = 1
 PLAYER_STAT_MAX = 99
-PLAYER_TOTAL_STATS_MAX = 570
+PLAYER_TOTAL_STATS_MAX = 500
 PLAYER_STATS = {
     "total": PLAYER_TOTAL_STATS_MAX,
     "min": PLAYER_STAT_MIN,
     "max": PLAYER_STAT_MAX,
+}
+
+# Team Overall Limits
+TEAM_TOTAL_OVERALL_MAX = 1000 # 11 players * 99 max overall
+
+# AI Model — Dream Player
+DREAM_PLAYER_COLUMNS = [
+    "player_positions",
+    "pace", "shooting", "passing",
+    "dribbling", "defending", "physic",
+    "overall",
+]
+
+DREAM_PLAYER_FEATURES = [
+    "pace", "shooting", "passing", "dribbling",
+    "defending", "physic",
+]
+
+POSITION_GROUPS = {
+    "GK": "GK",
+    "CB": "DEF", "LB": "DEF", "RB": "DEF", "LWB": "DEF", "RWB": "DEF",
+    "CDM": "MID", "CM": "MID", "CAM": "MID", "LM": "MID", "RM": "MID",
+    "LW": "ATT", "RW": "ATT", "CF": "ATT", "ST": "ATT", "LF": "ATT", "RF": "ATT",
 }
 
 # Formations

@@ -1,11 +1,6 @@
 from pathlib import Path
-from typing import Any, Literal
 
-from pydantic import (
-    PostgresDsn,
-    computed_field,
-    model_validator,
-)
+from pydantic import computed_field
 from pydantic_core import MultiHostUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,10 +22,12 @@ class Settings(BaseSettings):
 
     ALLOWED_HOSTS: str
     SECRET_KEY: str
-    ALGORITHM :str
-    ACCESS_TOKEN_EXPIRE_MINUTES :int
-    CRON_KEY : str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    CRON_KEY: str
     FOOTBALL_DATA_API_KEY: str
+    COOKIE_SECURE: bool
+    REFRESH_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 24 * 7
 
     @computed_field
     @property

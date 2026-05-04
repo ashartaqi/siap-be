@@ -4,11 +4,12 @@ from app import crud
 from app.api.deps import get_db
 from app.models import User
 from app.core.security import get_current_user
-from app.api.constants import FORMATIONS
+from app.schemas import Team
+from app.constants import FORMATIONS
 
 router = APIRouter()
 
-@router.get("")
+@router.get("", response_model=list[Team])
 def get_teams(
     db: Session = Depends(get_db),
     skip: int = 0,
@@ -33,7 +34,7 @@ def add_favourite(db: Session = Depends(get_db),current_user: User = Depends(get
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Team ID is required")
 
 
-@router.get("/fav")
+@router.get("/fav", response_model=list[Team])
 def get_favourite(db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     return crud.get_fav_teams(db, current_user.id)
 

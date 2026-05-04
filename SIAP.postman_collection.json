@@ -7,665 +7,21 @@
   },
   "item": [
     {
-      "name": "Teams",
-      "item": [
-        {
-          "name": "Get Teams",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/teams/?skip=0&limit=100",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "teams",
-                ""
-              ],
-              "query": [
-                {
-                  "key": "skip",
-                  "value": "0"
-                },
-                {
-                  "key": "limit",
-                  "value": "100"
-                },
-                {
-                  "key": "name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "league_name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "nationality_name",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_overall",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "max_overall",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_attack",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_midfield",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "min_defence",
-                  "value": "",
-                  "disabled": true
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Add Favourite Team",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/teams/fav?team=1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "teams",
-                "fav"
-              ],
-              "query": [
-                {
-                  "key": "team",
-                  "value": "1"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Favourite Teams",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/teams/fav",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "teams",
-                "fav"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Remove Favourite Team",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/teams/fav?team=1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "teams",
-                "fav"
-              ],
-              "query": [
-                {
-                  "key": "team",
-                  "value": "1"
-                }
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Players",
-      "item": [
-        {
-          "name": "Add Favourite Player",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/players/fav?player=1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "players",
-                "fav"
-              ],
-              "query": [
-                {
-                  "key": "player",
-                  "value": "1"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Favourite Players",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/players/fav",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "players",
-                "fav"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Remove Favourite Player",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/players/fav?player=1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "players",
-                "fav"
-              ],
-              "query": [
-                {
-                  "key": "player",
-                  "value": "1"
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Players",
-          "request": {
-            "method": "GET",
-            "header": []
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Live",
-      "item": [
-        {
-          "name": "Get Fixtures",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/live/fixtures?limit=11",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "live",
-                "fixtures"
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "11"
-                },
-                {
-                  "key": "league",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "status_filter",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "home_team",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "away_team",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "date",
-                  "value": "",
-                  "disabled": true
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Standings",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/live/standings?limit=20",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "live",
-                "standings"
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "20"
-                },
-                {
-                  "key": "league",
-                  "value": "",
-                  "disabled": true
-                },
-                {
-                  "key": "team_name",
-                  "value": "",
-                  "disabled": true
-                }
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Votes",
-      "item": [
-        {
-          "name": "Get All Votes",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/votes/all-votes?limit=11",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "votes",
-                "all-votes"
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "11"
-                },
-                {
-                  "key": "fixture_id",
-                  "value": "",
-                  "disabled": true
-                }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Create Vote",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n\t\"fixture_id\": 497553,\n\t\"prediction_home_score\": 2,\n\t\"prediction_away_score\": 1\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/votes/",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "votes",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get User Votes",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/votes/",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "votes",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Delete Vote",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/votes/?vote_id=1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "votes",
-                ""
-              ],
-              "query": [
-                {
-                  "key": "vote_id",
-                  "value": "1"
-                }
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Custom Players",
-      "item": [
-        {
-          "name": "Create Custom Player",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n\t\"name\": \"My Player\",\n\t\"position\": \"ST\",\n\t\"nationality\": \"Argentina\",\n\t\"shirt_number\": 10,\n\t\"preferred_foot\": \"Left\",\n\t\"pace\": 90,\n\t\"shooting\": 95,\n\t\"passing\": 85,\n\t\"dribbling\": 95,\n\t\"defending\": 30,\n\t\"physic\": 70\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/custom-player/",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "custom-player",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get Custom Player",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/custom-player/",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "custom-player",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Update Custom Player",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n\t\"pace\": 95,\n\t\"shooting\": 99\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/custom-player/",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "custom-player",
-                ""
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Delete Custom Player",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{bearer_token}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/custom-player/",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "custom-player",
-                ""
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
       "name": "User",
       "item": [
         {
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n\t\"username\": \"johndoe\",\n\t\"email\": \"john@example.com\",\n\t\"first_name\": \"John\",\n\t\"last_name\": \"Doe\",\n\t\"password\": \"password123\",\n\t\"confirm_password\": \"password123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/user/register",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "user",
-                "register"
-              ]
+              "host": ["{{base_url}}"],
+              "path": ["user", "register"]
             }
           },
           "response": []
@@ -678,37 +34,1003 @@
               "script": {
                 "exec": [
                   "var jsonData = pm.response.json();",
-                  "if (jsonData.token) {",
-                  "    pm.collectionVariables.set('bearer_token', jsonData.token);",
+                  "if (jsonData.access_token) {",
+                  "    pm.collectionVariables.set('bearer_token', jsonData.access_token);",
                   "}"
                 ],
-                "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "type": "text/javascript"
               }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n\t\"email\": \"l2403@lhr.nu.edu.pk\",\n\t\"password\": \"string123\"\n}"
+              "raw": "{\n\t\"email\": \"john@example.com\",\n\t\"password\": \"password123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/user/login",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "user",
-                "login"
+              "host": ["{{base_url}}"],
+              "path": ["user", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"email\": \"john@example.com\",\n\t\"current_password\": \"password123\",\n\t\"password\": \"newpassword123\",\n\t\"confirm_password\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/user/reset-password",
+              "host": ["{{base_url}}"],
+              "path": ["user", "reset-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["user", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/logout",
+              "host": ["{{base_url}}"],
+              "path": ["user", "logout"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user/me",
+              "host": ["{{base_url}}"],
+              "path": ["user", "me"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teams",
+      "item": [
+        {
+          "name": "Get Teams",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/teams?skip=0&limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["teams"],
+              "query": [
+                { "key": "skip", "value": "0" },
+                { "key": "limit", "value": "100" },
+                { "key": "name", "value": "", "disabled": true },
+                { "key": "league_name", "value": "", "disabled": true },
+                { "key": "nationality_name", "value": "", "disabled": true },
+                { "key": "min_overall", "value": "", "disabled": true },
+                { "key": "max_overall", "value": "", "disabled": true },
+                { "key": "min_attack", "value": "", "disabled": true },
+                { "key": "min_midfield", "value": "", "disabled": true },
+                { "key": "min_defence", "value": "", "disabled": true },
+                { "key": "team_type", "value": "club", "disabled": true }
               ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Formations",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/teams/formations",
+              "host": ["{{base_url}}"],
+              "path": ["teams", "formations"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Favourite Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/teams/fav?team=1",
+              "host": ["{{base_url}}"],
+              "path": ["teams", "fav"],
+              "query": [{ "key": "team", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Favourite Teams",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/teams/fav",
+              "host": ["{{base_url}}"],
+              "path": ["teams", "fav"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Favourite Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/teams/fav?team=1",
+              "host": ["{{base_url}}"],
+              "path": ["teams", "fav"],
+              "query": [{ "key": "team", "value": "1" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Players",
+      "item": [
+        {
+          "name": "Get Players",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["players"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "skip", "value": "0", "disabled": true },
+                { "key": "name", "value": "", "disabled": true },
+                { "key": "position", "value": "", "disabled": true },
+                { "key": "nationality_name", "value": "", "disabled": true },
+                { "key": "team_id", "value": "", "disabled": true },
+                { "key": "min_overall", "value": "", "disabled": true },
+                { "key": "max_overall", "value": "", "disabled": true },
+                { "key": "min_age", "value": "", "disabled": true },
+                { "key": "max_age", "value": "", "disabled": true },
+                { "key": "preferred_foot", "value": "", "disabled": true },
+                { "key": "order_by_stat", "value": "", "disabled": true },
+                { "key": "pace", "value": "", "disabled": true },
+                { "key": "shooting", "value": "", "disabled": true },
+                { "key": "passing", "value": "", "disabled": true },
+                { "key": "dribbling", "value": "", "disabled": true },
+                { "key": "defending", "value": "", "disabled": true },
+                { "key": "physic", "value": "", "disabled": true },
+                { "key": "unlock_status", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Player Positions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players/positions",
+              "host": ["{{base_url}}"],
+              "path": ["players", "positions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Preferred Feet",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players/preferred-feet",
+              "host": ["{{base_url}}"],
+              "path": ["players", "preferred-feet"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Stats Limits",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players/stats-limits",
+              "host": ["{{base_url}}"],
+              "path": ["players", "stats-limits"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Favourite Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players/fav?player=1",
+              "host": ["{{base_url}}"],
+              "path": ["players", "fav"],
+              "query": [{ "key": "player", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Favourite Players",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players/fav",
+              "host": ["{{base_url}}"],
+              "path": ["players", "fav"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Favourite Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/players/fav?player=1",
+              "host": ["{{base_url}}"],
+              "path": ["players", "fav"],
+              "query": [{ "key": "player", "value": "1" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Live",
+      "item": [
+        {
+          "name": "Get Fixtures",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live/fixtures?limit=11",
+              "host": ["{{base_url}}"],
+              "path": ["live", "fixtures"],
+              "query": [
+                { "key": "limit", "value": "11" },
+                { "key": "league", "value": "", "disabled": true },
+                { "key": "status_filter", "value": "", "disabled": true },
+                { "key": "home_team", "value": "", "disabled": true },
+                { "key": "away_team", "value": "", "disabled": true },
+                { "key": "date", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Standings",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live/standings?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["live", "standings"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "league", "value": "", "disabled": true },
+                { "key": "team_name", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Match Statuses",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live/match-statuses",
+              "host": ["{{base_url}}"],
+              "path": ["live", "match-statuses"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fixture Leagues",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live/fixture-leagues",
+              "host": ["{{base_url}}"],
+              "path": ["live", "fixture-leagues"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current Season",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live/current-season",
+              "host": ["{{base_url}}"],
+              "path": ["live", "current-season"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Predictions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/live/predict?limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["live", "predict"],
+              "query": [{ "key": "limit", "value": "10" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Fixtures (Cron)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-CRON-KEY", "value": "{{cron_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/live/update-fixtures",
+              "host": ["{{base_url}}"],
+              "path": ["live", "update-fixtures"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Leagues (Cron)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-CRON-KEY", "value": "{{cron_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/live/fetch-leagues",
+              "host": ["{{base_url}}"],
+              "path": ["live", "fetch-leagues"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Fixtures (Cron)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-CRON-KEY", "value": "{{cron_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/live/fetch-fixtures",
+              "host": ["{{base_url}}"],
+              "path": ["live", "fetch-fixtures"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Votes",
+      "item": [
+        {
+          "name": "Get My Votes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/votes/my-votes",
+              "host": ["{{base_url}}"],
+              "path": ["votes", "my-votes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Votes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/votes/all-votes?fixture_id=1&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["votes", "all-votes"],
+              "query": [
+                { "key": "fixture_id", "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Vote",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"fixture_id\": 1,\n\t\"prediction_home_score\": 2,\n\t\"prediction_away_score\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/votes",
+              "host": ["{{base_url}}"],
+              "path": ["votes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Vote",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"fixture_id\": 1,\n\t\"prediction_home_score\": 3,\n\t\"prediction_away_score\": 0\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/votes",
+              "host": ["{{base_url}}"],
+              "path": ["votes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Vote",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/votes?vote_id=1",
+              "host": ["{{base_url}}"],
+              "path": ["votes"],
+              "query": [{ "key": "vote_id", "value": "1" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Custom Player",
+      "item": [
+        {
+          "name": "Create Custom Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"name\": \"My Player\",\n\t\"position\": \"ST\",\n\t\"nationality\": \"Argentina\",\n\t\"shirt_number\": 10,\n\t\"preferred_foot\": \"Left\",\n\t\"pace\": 85,\n\t\"shooting\": 90,\n\t\"passing\": 80,\n\t\"dribbling\": 88,\n\t\"defending\": 30,\n\t\"physic\": 72\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/custom-player",
+              "host": ["{{base_url}}"],
+              "path": ["custom-player"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Custom Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/custom-player",
+              "host": ["{{base_url}}"],
+              "path": ["custom-player"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Custom Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"pace\": 90,\n\t\"shooting\": 95\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/custom-player",
+              "host": ["{{base_url}}"],
+              "path": ["custom-player"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Custom Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/custom-player",
+              "host": ["{{base_url}}"],
+              "path": ["custom-player"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dream Team",
+      "item": [
+        {
+          "name": "Create Dream Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"formation\": \"4-3-3\",\n\t\"slots\": [\n\t\t{\"position\": \"GK\", \"row\": null, \"col\": null, \"player_id\": 1},\n\t\t{\"position\": \"LB\", \"row\": 2, \"col\": 0, \"player_id\": 2},\n\t\t{\"position\": \"CB\", \"row\": 2, \"col\": 1, \"player_id\": 3},\n\t\t{\"position\": \"CB\", \"row\": 2, \"col\": 2, \"player_id\": 4},\n\t\t{\"position\": \"RB\", \"row\": 2, \"col\": 3, \"player_id\": 5},\n\t\t{\"position\": \"CM\", \"row\": 1, \"col\": 0, \"player_id\": 6},\n\t\t{\"position\": \"CM\", \"row\": 1, \"col\": 1, \"player_id\": 7},\n\t\t{\"position\": \"CM\", \"row\": 1, \"col\": 2, \"player_id\": 8},\n\t\t{\"position\": \"LW\", \"row\": 0, \"col\": 0, \"player_id\": 9},\n\t\t{\"position\": \"ST\", \"row\": 0, \"col\": 1, \"player_id\": 10},\n\t\t{\"position\": \"RW\", \"row\": 0, \"col\": 2, \"player_id\": 11}\n\t]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/dream-team",
+              "host": ["{{base_url}}"],
+              "path": ["dream-team"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dream Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dream-team",
+              "host": ["{{base_url}}"],
+              "path": ["dream-team"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Dream Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"formation\": \"4-4-2\",\n\t\"slots\": [\n\t\t{\"position\": \"GK\", \"row\": null, \"col\": null, \"player_id\": 1},\n\t\t{\"position\": \"LB\", \"row\": 2, \"col\": 0, \"player_id\": 2},\n\t\t{\"position\": \"CB\", \"row\": 2, \"col\": 1, \"player_id\": 3},\n\t\t{\"position\": \"CB\", \"row\": 2, \"col\": 2, \"player_id\": 4},\n\t\t{\"position\": \"RB\", \"row\": 2, \"col\": 3, \"player_id\": 5},\n\t\t{\"position\": \"LM\", \"row\": 1, \"col\": 0, \"player_id\": 6},\n\t\t{\"position\": \"CM\", \"row\": 1, \"col\": 1, \"player_id\": 7},\n\t\t{\"position\": \"CM\", \"row\": 1, \"col\": 2, \"player_id\": 8},\n\t\t{\"position\": \"RM\", \"row\": 1, \"col\": 3, \"player_id\": 9},\n\t\t{\"position\": \"ST\", \"row\": 0, \"col\": 0, \"player_id\": 10},\n\t\t{\"position\": \"ST\", \"row\": 0, \"col\": 1, \"player_id\": 11}\n\t]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/dream-team",
+              "host": ["{{base_url}}"],
+              "path": ["dream-team"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Dream Team Slot",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"player_id\": 42\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/dream-team/slot/1",
+              "host": ["{{base_url}}"],
+              "path": ["dream-team", "slot", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Dream Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dream-team",
+              "host": ["{{base_url}}"],
+              "path": ["dream-team"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Optimized Dream Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/dream-team/4-3-3",
+              "host": ["{{base_url}}"],
+              "path": ["dream-team", "4-3-3"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Battle",
+      "item": [
+        {
+          "name": "Get Battle Users",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/battle/users",
+              "host": ["{{base_url}}"],
+              "path": ["battle", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Dream Team",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/battle/team/1",
+              "host": ["{{base_url}}"],
+              "path": ["battle", "team", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Custom Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/battle/player/1",
+              "host": ["{{base_url}}"],
+              "path": ["battle", "player", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate Team Battle",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/battle/team/simulate/2",
+              "host": ["{{base_url}}"],
+              "path": ["battle", "team", "simulate", "2"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Simulate Player Battle",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/battle/player/simulate/2",
+              "host": ["{{base_url}}"],
+              "path": ["battle", "player", "simulate", "2"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Community",
+      "item": [
+        {
+          "name": "Get Chat Messages",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/community?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["community"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Send Chat Message",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"content\": \"Hello everyone!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/community",
+              "host": ["{{base_url}}"],
+              "path": ["community"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Match Comments",
+      "item": [
+        {
+          "name": "Get Match Comments",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/match-comments/1",
+              "host": ["{{base_url}}"],
+              "path": ["match-comments", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Post Match Comment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\t\"content\": \"What a goal!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/match-comments/1",
+              "host": ["{{base_url}}"],
+              "path": ["match-comments", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shop",
+      "item": [
+        {
+          "name": "Unlock Player",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{bearer_token}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shop/unlock/1",
+              "host": ["{{base_url}}"],
+              "path": ["shop", "unlock", "1"]
             }
           },
           "response": []
@@ -724,6 +1046,11 @@
     },
     {
       "key": "bearer_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cron_key",
       "value": "",
       "type": "string"
     }

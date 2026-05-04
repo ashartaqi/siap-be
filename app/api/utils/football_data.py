@@ -18,16 +18,14 @@ class FootballDataClient:
         self.api_key = settings.FOOTBALL_DATA_API_KEY
         self.headers = {"X-Auth-Token": self.api_key}
 
-    # ── Request client ──────────────────────────────────────────────
-
+    # Request client
     def get(self, path: str, params: dict | None = None) -> dict:
         url = f"{self.BASE_URL}{path}"
         resp = httpx.get(url, headers=self.headers, params=params)
         resp.raise_for_status()
         return resp.json()
 
-    # ── Competitions ────────────────────────────────────────────────
-
+    # Competitions
     def get_competitions(self, params: dict | None = None) -> dict:
         """List all available competitions (filtered by plan/tier)."""
         return self.get("/competitions", params)
@@ -62,8 +60,7 @@ class FootballDataClient:
         """
         return self.get(f"/competitions/{code}/scorers", params)
 
-    # ── Matches ─────────────────────────────────────────────────────
-
+    # Matches
     def get_matches(self, params: dict | None = None) -> dict:
         """Get matches across all competitions (today by default).
         Params: competitions, dateFrom, dateTo, status, ids
@@ -80,8 +77,7 @@ class FootballDataClient:
         """
         return self.get(f"/matches/{match_id}/head2head", params)
 
-    # ── Teams ───────────────────────────────────────────────────────
-
+    # Teams
     def get_team(self, team_id: int) -> dict:
         """Get a single team by ID (includes squad and coach)."""
         return self.get(f"/teams/{team_id}")
@@ -92,8 +88,7 @@ class FootballDataClient:
         """
         return self.get(f"/teams/{team_id}/matches", params)
 
-    # ── Persons (players, coaches, referees) ────────────────────────
-
+    # Persons (players, coaches, referees)
     def get_person(self, person_id: int) -> dict:
         """Get a person by ID."""
         return self.get(f"/persons/{person_id}")
@@ -104,8 +99,7 @@ class FootballDataClient:
         """
         return self.get(f"/persons/{person_id}/matches", params)
 
-    # ── Areas ───────────────────────────────────────────────────────
-
+    # Areas
     def get_areas(self, params: dict | None = None) -> dict:
         """List all areas (countries/regions)."""
         return self.get("/areas", params)
