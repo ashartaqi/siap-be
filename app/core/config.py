@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     FOOTBALL_DATA_API_KEY: str
     COOKIE_SECURE: bool
     REFRESH_TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 24 * 7
+    RATE_LIMIT_STORAGE_URI: str = "memory://"
 
     @computed_field
     @property

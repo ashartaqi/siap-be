@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 from datetime import date, datetime, timezone, timedelta
 from app.core.security import verify_password, get_password_hash, hash_refresh_token
 from sqlalchemy.exc import IntegrityError
@@ -166,7 +166,9 @@ def get_teams(
         query = query.filter(Club.league_name != "Friendly International")
 
     if name:
-        query = query.filter(func.replace(Club.name, ' ', '').ilike(f"%{name.replace(' ', '')}%"))
+        name_parts = [n.strip() for n in name.split(",") if n.strip()]
+        conditions = [func.replace(Club.name, ' ', '').ilike(f"%{n.replace(' ', '')}%") for n in name_parts]
+        query = query.filter(or_(*conditions))
     if league_name:
         query = query.filter(func.replace(Club.league_name, ' ', '').ilike(f"%{league_name.replace(' ', '')}%"))
     if nationality_name:
@@ -368,24 +370,29 @@ def get_fixtures(
     status_filter: str = None,
     home_team: str = None,
     away_team: str = None,
-    date: str = None
+    date: str = None,
+    team: str = None,
 ):
     query = db.query(Fixtures)
-    
+
     if league:
         query = query.filter(Fixtures.league == league)
     if status_filter:
-        if (status_filter == 'FINISHED'):
-            query = query.filter(Fixtures.status == status_filter).order_by(Fixtures.date.desc())
+        statuses = [s.strip() for s in status_filter.split(",")]
+        if statuses == ["FINISHED"]:
+            query = query.filter(Fixtures.status == "FINISHED").order_by(Fixtures.date.desc())
         else:
-            query = query.filter(Fixtures.status == status_filter)
-    if home_team:
-        query = query.filter(Fixtures.home_team.ilike(f"%{home_team}%"))
-    if away_team:
-        query = query.filter(Fixtures.away_team.ilike(f"%{away_team}%"))
+            query = query.filter(Fixtures.status.in_(statuses))
+    if team:
+        query = query.filter(or_(Fixtures.home_team.ilike(f"%{team}%"), Fixtures.away_team.ilike(f"%{team}%")))
+    else:
+        if home_team:
+            query = query.filter(Fixtures.home_team.ilike(f"%{home_team}%"))
+        if away_team:
+            query = query.filter(Fixtures.away_team.ilike(f"%{away_team}%"))
     if date:
         query = query.filter(Fixtures.date == date)
-    
+
     return query.limit(limit).all()
 
 
