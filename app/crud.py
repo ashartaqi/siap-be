@@ -191,9 +191,16 @@ def get_club_by_name(db: Session, name: str):
     return db.query(Club).filter(Club.name == name).first()
 
 
-def add_fav_team(db: Session, user: int, team: int):
+def add_fav_team(db: Session, user: int, team: int):    
+    if db.query(FavouriteClubs).filter(FavouriteClubs.user_id == user, FavouriteClubs.club_id == team).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This favourite club already exists"
+        )
     fav_team = FavouriteClubs(user_id=user, club_id=team)
     return create(db, fav_team, "Favourite either exists or there was a error")
+
+
 
 
 def get_fav_teams(db: Session, user: int):
@@ -320,8 +327,14 @@ def get_players(
 
 
 def add_fav_player(db: Session, user: int, player: int):
+    if db.query(FavouritePlayers).filter(FavouritePlayers.user_id == user, FavouritePlayers.player_id == player).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This favourite player already exists"
+        )
     fav_player = FavouritePlayers(user_id=user, player_id=player)
     return create(db, fav_player, "Favourite either exists or there was a error")
+
 
 
 def get_fav_players(db: Session, user: int):
