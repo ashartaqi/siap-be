@@ -48,6 +48,9 @@ def get_club_by_name(db: Session, name: str):
 
 
 def add_fav_team(db: Session, user: int, team: int):
+    # Ensure only 1 favourite team per user by deleting any existing ones
+    db.query(FavouriteClubs).filter(FavouriteClubs.user_id == user).delete(synchronize_session=False)
+    
     fav_team = FavouriteClubs(user_id=user, club_id=team)
     return create(db, fav_team, "Favourite either exists or there was a error")
 
