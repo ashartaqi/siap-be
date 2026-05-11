@@ -2,8 +2,8 @@ from typing import Generator
 from app.core.db import SessionLocal
 
 def get_db() -> Generator:
+    db = SessionLocal()
     try:
-        db = SessionLocal()
         yield db
     finally:
         db.close()
