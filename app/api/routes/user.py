@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -21,13 +21,15 @@ from app.crud import (
     reset_user_password,
     check_and_award_daily_login_reward
 )
+from app.core.rate_limit import limiter, AUTH_LIMIT, REFRESH_LIMIT
 from app.schemas import AccessToken, RegisteredUser, UserLogin, UserRegister, UserResetPassword
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=RegisteredUser)
-def register(user: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit(AUTH_LIMIT)
+def register(request: Request, user: UserRegister, db: Session = Depends(get_db)):
     try:
         db_user = create_user(db, username=user.username, email=user.email, password=user.password, first_name=user.first_name, last_name=user.last_name)
         if not db_user:
@@ -44,7 +46,8 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password")
-def reset_password(user: UserResetPassword, response: Response, db: Session = Depends(get_db)):
+@limiter.limit(AUTH_LIMIT)
+def reset_password(request: Request, user: UserResetPassword, response: Response, db: Session = Depends(get_db)):
     try:
         db_user = reset_user_password(db, email=user.email, current_password=user.current_password, password=user.password)
         if not db_user:
@@ -64,7 +67,8 @@ def reset_password(user: UserResetPassword, response: Response, db: Session = De
 
 
 @router.post("/login", response_model=AccessToken)
-def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+@limiter.limit(AUTH_LIMIT)
+def login(request: Request, user: UserLogin, response: Response, db: Session = Depends(get_db)):
     try:
         db_user = authenticate_user(db, email=user.email, password=user.password)
         if not db_user:
@@ -93,7 +97,9 @@ def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=AccessToken)
+@limiter.limit(REFRESH_LIMIT)
 def refresh(
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     refresh_token: str | None = Cookie(default=None),

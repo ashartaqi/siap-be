@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 from datetime import date, datetime, timezone, timedelta
 from app.core.security import verify_password, get_password_hash, hash_refresh_token
 from sqlalchemy.exc import IntegrityError
@@ -166,7 +166,9 @@ def get_teams(
         query = query.filter(Club.league_name != "Friendly International")
 
     if name:
-        query = query.filter(func.replace(Club.name, ' ', '').ilike(f"%{name.replace(' ', '')}%"))
+        name_parts = [n.strip() for n in name.split(",") if n.strip()]
+        conditions = [func.replace(Club.name, ' ', '').ilike(f"%{n.replace(' ', '')}%") for n in name_parts]
+        query = query.filter(or_(*conditions))
     if league_name:
         query = query.filter(func.replace(Club.league_name, ' ', '').ilike(f"%{league_name.replace(' ', '')}%"))
     if nationality_name:
@@ -189,9 +191,16 @@ def get_club_by_name(db: Session, name: str):
     return db.query(Club).filter(Club.name == name).first()
 
 
-def add_fav_team(db: Session, user: int, team: int):
+def add_fav_team(db: Session, user: int, team: int):    
+    if db.query(FavouriteClubs).filter(FavouriteClubs.user_id == user, FavouriteClubs.club_id == team).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This favourite club already exists"
+        )
     fav_team = FavouriteClubs(user_id=user, club_id=team)
     return create(db, fav_team, "Favourite either exists or there was a error")
+
+
 
 
 def get_fav_teams(db: Session, user: int):
@@ -318,8 +327,14 @@ def get_players(
 
 
 def add_fav_player(db: Session, user: int, player: int):
+    if db.query(FavouritePlayers).filter(FavouritePlayers.user_id == user, FavouritePlayers.player_id == player).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This favourite player already exists"
+        )
     fav_player = FavouritePlayers(user_id=user, player_id=player)
     return create(db, fav_player, "Favourite either exists or there was a error")
+
 
 
 def get_fav_players(db: Session, user: int):
@@ -353,24 +368,29 @@ def get_fixtures(
     status_filter: str = None,
     home_team: str = None,
     away_team: str = None,
-    date: str = None
+    date: str = None,
+    team: str = None,
 ):
     query = db.query(Fixtures)
-    
+
     if league:
         query = query.filter(Fixtures.league == league)
     if status_filter:
-        if (status_filter == 'FINISHED'):
-            query = query.filter(Fixtures.status == status_filter).order_by(Fixtures.date.desc())
+        statuses = [s.strip() for s in status_filter.split(",")]
+        if statuses == ["FINISHED"]:
+            query = query.filter(Fixtures.status == "FINISHED").order_by(Fixtures.date.desc())
         else:
-            query = query.filter(Fixtures.status == status_filter)
-    if home_team:
-        query = query.filter(Fixtures.home_team.ilike(f"%{home_team}%"))
-    if away_team:
-        query = query.filter(Fixtures.away_team.ilike(f"%{away_team}%"))
+            query = query.filter(Fixtures.status.in_(statuses))
+    if team:
+        query = query.filter(or_(Fixtures.home_team.ilike(f"%{team}%"), Fixtures.away_team.ilike(f"%{team}%")))
+    else:
+        if home_team:
+            query = query.filter(Fixtures.home_team.ilike(f"%{home_team}%"))
+        if away_team:
+            query = query.filter(Fixtures.away_team.ilike(f"%{away_team}%"))
     if date:
         query = query.filter(Fixtures.date == date)
-    
+
     return query.limit(limit).all()
 
 
