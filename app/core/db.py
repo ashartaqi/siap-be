@@ -9,7 +9,13 @@ from app.core.config import settings
 # Construct the database URL from settings
 DATABASE_URL = str(settings.sqlalchemy_database_uri)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

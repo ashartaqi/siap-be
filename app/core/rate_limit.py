@@ -3,7 +3,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from app.core.security import decode_access_token, settings
 
-DEFAULT_LIMIT = "120/minute"
+DEFAULT_LIMIT = "90/minute"
 AUTH_LIMIT = "20/minute"
 REFRESH_LIMIT = "10/minute"
 
