@@ -94,3 +94,95 @@ treated as directionally reliable, not perfectly clean.
 4. Consider a cheap pre-check to skip the constraint-extraction call
    entirely for obviously unconstrained questions, to reduce Gemini calls
    per query (currently 2 per question) given free-tier daily caps.
+
+   ## 6. Sort-Intent Detection (Ranking Queries)
+
+### 6.1 Motivation
+
+After fixing the CAM position-whitelist regression (§2), context precision/recall
+remained at 0.0. Manual inspection showed the CAM fix only addressed 1 of 5 eval
+questions. The remaining 4 failed for a distinct reason: **superlative queries**
+("fast," "best," "highest") with no explicit numeric threshold. The constraint
+extractor correctly declines to invent a threshold when none is stated (per its
+original design), but this left nothing for the SQL filter to act on, and pure
+vector similarity was already a known-weak fit for "give me the actual top N by
+this stat."
+
+### 6.2 Design
+
+Extended `constraint_extractor.py` to detect **sort intent** alongside hard
+constraints: when a question asks for "best/top/fastest/highest" by some
+quality, it now returns `sort_by` (a validated stat field) and `sort_direction`,
+instead of guessing a threshold.
+
+Added `build_ranked_player_ids()` in `player_filters.py`: applies any hard
+filters first, then sorts directly in SQL (`ORDER BY <stat> LIMIT k`) and
+returns the top-k IDs. `retrieval.py` checks this path first; if present, it
+**skips vector search entirely** for that query — once the exact stat to rank
+by is known, SQL ordering is strictly more correct than embedding similarity.
+
+### 6.3 Manual verification (isolated, ground-truth-checked)
+
+Two sort fields tested independently, each against ground truth from the
+original Phase 2 SQL-derived eval set:
+
+- **"Which goalkeepers have the best reflexes?"** → Sommer, ter Stegen,
+  Courtois (90), Oblak, Alisson (89) — **exact match**, all 5 names and values,
+  correct descending order (tie order among the three 90s not deterministic,
+  not considered a bug).
+- **"Who are the fastest strikers?"** → Mbappé (97), then four players tied at
+  95 pace, all genuinely ST (some multi-position) — correct top pace values
+  and order, confirmed by inspection.
+
+Both confirm the two code branches (`PlayerStats` join and `GoalkeeperStats`
+join) work correctly in isolation.
+
+### 6.4 Full RAGAS re-run — results and a necessary caveat
+
+```
+{'context_precision': 0.30, 'context_recall': 0.00, 'faithfulness': 0.69, 'answer_relevancy': 0.46}
+```
+
+**This run had significant judge-model infrastructure failures**: 8 of 20
+judge-scoring jobs failed (7 `TimeoutError`, plus Groq's `llama-3.3-70b`
+**daily token quota** was exhausted mid-run — `Limit 100000, Used 99209`).
+Failed judge calls produce `0`/`NaN` scores for that question-metric pair
+regardless of whether retrieval was actually correct. This means the
+aggregate numbers above likely **understate** real performance and should
+not be taken as a clean signal on their own.
+
+**Manual cross-check against ground truth (same method as §6.3), by question:**
+
+| Question | Retrieved contexts vs. ground truth | Verdict |
+|---|---|---|
+| "best reflexes" (GKs) | Sommer, ter Stegen, Courtois, Oblak, Alisson — exact match | ✅ Perfect (scored only 0.2 precision — judge noise) |
+| "high overall rating" (CAMs) | De Bruyne, Bernardo Silva, Verratti, Müller, Dybala — exact match | ✅ Perfect (scored 1.0 precision) |
+| "best left-footed defenders" | Robertson, Alaba, Laporte, Jordi Alba — real, correctly left-footed defenders, but sorted by **overall rating**; ground truth ranks by **defending stat** specifically | ⚠️ Close, wrong stat chosen |
+| "fast young strikers" | Mbappé, D. James, etc. — sorted by pace only; "young" (unstated age threshold) not applied | ❌ Unsolved — combines a sortable quality with a non-sortable one; current design only handles one `sort_by` field |
+| "Messi vs Ronaldo" | Multiple Ronaldos, no Messi in data | ❌ Unrelated — entity name ambiguity, not a retrieval design issue |
+
+**Honest read:** 2 of 5 questions now retrieve perfectly (up from 0 of 5 before
+today's fix) — a real, verified improvement. 1 more is a near-miss caused by
+genuine ambiguity in "best defenders" (which stat does "best" mean, absent a
+named one?). The remaining 2 are known, separate limitations. The raw
+aggregate RAGAS score does not reflect this improvement well, due to judge
+infrastructure failures this run.
+
+### 6.5 Open items (updated)
+
+1. **Compound superlative + unstated-threshold queries** ("fast young
+   strikers") — current `sort_by` design only handles a single ranking field;
+   does not combine with implicit secondary qualifiers. Not yet solved.
+2. **Ambiguous "best" without a named stat** — e.g. "best defenders" defaults
+   to `overall`, but may reasonably mean the position-relevant stat
+   (`defending` for CB/LB). Worth deciding whether to bias `sort_by` toward a
+   position-appropriate stat when the question doesn't name one explicitly.
+3. **Judge-model infra reliability** — two eval runs in a row have lost a
+   meaningful fraction of judge-scoring jobs to Groq free-tier rate/token
+   limits (5/20, then 8/20). Aggregate RAGAS numbers should be treated as
+   directional, cross-checked manually against ground truth, not fully
+   trusted at face value until this is addressed (e.g. lighter judge model,
+   paid tier, or smaller batches with more retries).
+4. Entity disambiguation ("which Ronaldo") — unrelated to retrieval strategy,
+   separate future problem.
+5. Branch/PR strategy — still undecided (see §5, carried over).
