@@ -1,37 +1,28 @@
 from datetime import date
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, desc, asc
 from app.models import Player, PlayerStats, GoalkeeperStats, PlayerPos
-
 
 VALID_POSITIONS = {"CB", "LB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "CF", "ST", "GK"}
 
+GK_SORT_FIELDS = {"diving", "handling", "kicking", "positioning", "reflexes", "speed"}
+PLAYER_SORT_FIELDS = {"overall", "pace", "shooting", "passing", "dribbling", "defending", "physic"}
+
 
 def _age_bounds_to_dob_range(age_min: int | None, age_max: int | None):
-    """Convert an age range into a dob range.
-    Older age requirement -> dob must be further in the past (smaller date).
-    """
     today = date.today()
-    max_dob = None  # player at least age_min -> dob <= this
-    min_dob = None  # player at most age_max -> dob >= this
-
+    max_dob = None
+    min_dob = None
     if age_min is not None:
         max_dob = today.replace(year=today.year - age_min)
     if age_max is not None:
         min_dob = today.replace(year=today.year - age_max - 1)
-
     return min_dob, max_dob
 
 
-def build_filtered_player_ids(db: Session, constraints: dict) -> list[int] | None:
-    """
-    Returns matching player IDs, or None if no usable structured constraints
-    were found — signals the caller to fall back to pure vector search.
-    """
-    if not constraints:
-        return None
-
-    query = db.query(Player.id)
+def _apply_shared_filters(query, constraints: dict) -> tuple:
+    """Applies filters common to both the ID-list path and the ranking path.
+    Returns (query, filters_applied: bool)."""
     filters_applied = False
 
     age_min = constraints.get("age_min")
@@ -68,6 +59,22 @@ def build_filtered_player_ids(db: Session, constraints: dict) -> list[int] | Non
         query = query.filter(PlayerPos.position.in_(positions))
         filters_applied = True
 
+    return query, filters_applied
+
+
+def build_filtered_player_ids(db: Session, constraints: dict) -> list[int] | None:
+    """
+    Returns matching player IDs, or None if no usable structured constraints
+    were found — signals the caller to fall back to pure vector search.
+    Skips ranking-only constraints (sort_by with nothing else) — that's
+    handled separately by build_ranked_player_ids.
+    """
+    if not constraints:
+        return None
+
+    query = db.query(Player.id)
+    query, filters_applied = _apply_shared_filters(query, constraints)
+
     stats = constraints.get("stats") or {}
     if stats:
         query = query.join(PlayerStats, PlayerStats.player_id == Player.id)
@@ -96,3 +103,33 @@ def build_filtered_player_ids(db: Session, constraints: dict) -> list[int] | Non
         return None
 
     return [row.id for row in query.distinct().all()]
+
+
+def build_ranked_player_ids(db: Session, constraints: dict, top_k: int = 5) -> list[int] | None:
+    """
+    Handles sort_by queries ("best reflexes", "fastest strikers"): applies any
+    hard filters, then sorts directly in SQL and returns the top_k IDs.
+    Returns None if there's no sort_by — signals caller to use the normal path.
+    """
+    sort_by = constraints.get("sort_by")
+    if not sort_by:
+        return None
+
+    direction = desc if constraints.get("sort_direction", "desc") == "desc" else asc
+
+    query = db.query(Player.id)
+    query, _ = _apply_shared_filters(query, constraints)
+
+    if sort_by in GK_SORT_FIELDS:
+        query = query.join(GoalkeeperStats, GoalkeeperStats.player_id == Player.id)
+        query = query.order_by(direction(getattr(GoalkeeperStats, sort_by)))
+    elif sort_by in PLAYER_SORT_FIELDS:
+        if sort_by == "overall":
+            query = query.order_by(direction(Player.overall))
+        else:
+            query = query.join(PlayerStats, PlayerStats.player_id == Player.id)
+            query = query.order_by(direction(getattr(PlayerStats, sort_by)))
+    else:
+        return None  # shouldn't happen, extractor already validates this
+
+    return [row.id for row in query.limit(top_k).all()]
