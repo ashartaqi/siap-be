@@ -292,15 +292,17 @@ model-deprecation churn.
    pure vector search with no signal to the caller that this happened.
    Worth considering a distinguishable "low confidence" flag in the
    response when this occurs, rather than degrading silently.
-5. **New: `generation.py` has no error handling.** Any exception in the
-   final generation call currently crashes the whole `/ask` request. Should
-   catch and return a graceful fallback message, matching the pattern
-   already used in `constraint_extractor.py`.
-6. **New: potential double-counting in multi-position filters.**
-   `_apply_shared_filters()`'s `PlayerPos` join can fan out one row per
-   matching position for a multi-position filter (e.g. "midfielders or
-   forwards"), which would inflate a `count` aggregation for players
-   qualifying under more than one listed position. Not triggered by any
-   verified test so far (single-position queries only), but worth a
-   `.distinct()` safeguard before this is considered fully hardened.
+5. ~~generation.py has no error handling~~ — **Resolved.** Added a
+   try/except with logging around the generate_content call; verified via
+   simulated failure (zero API cost): logs the real error and returns a
+   graceful fallback message instead of crashing the request.
+6. Multi-position double-counting (count queries) -- .distinct() fix applied
+   in code, but NOT yet empirically verified. Attempted test ("How many
+   midfielders playing CM or CDM are there?") did not exercise the intended
+   path -- constraints did not resolve to aggregation intent (or extraction
+   itself failed silently to a 503, indistinguishable from this output alone),
+   and the question fell through to filtered retrieval instead. Still an
+   open item: confirm extraction correctly detects count-intent for
+   multi-position phrasing, then verify the distinct() fix against the
+   7222 ground truth for CM/CDM.
 7. Branch/PR strategy — still undecided (carried over from §5).
