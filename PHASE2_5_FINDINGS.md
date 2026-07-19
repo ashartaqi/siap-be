@@ -340,3 +340,28 @@ exactly.
 
 Aggregation layer considered feature-complete and verified as of this
 entry.
+
+### 7.8 Club-name filtering
+
+**Motivation:** No way to filter or aggregate by club existed — surfaced by
+testing "average overall rating at Real Madrid," which the extractor had
+nowhere to route (no `club` field in the schema).
+
+**Design:** Added `club` to the extraction prompt/schema (exact name as
+stated, no guessing). Added a `Club` join + `ilike` filter to
+`_apply_shared_filters()`, so club filtering is automatically available
+across all three paths (hard-filter retrieval, sort-by ranking, and
+aggregation) with no per-path duplication.
+
+**Verification (ground truth via direct SQL, `AVG(p.overall)` for Real
+Madrid — note: required qualifying `p.overall` explicitly, since `Club`
+also has its own `overall` column, causing an ambiguous-column SQL error
+on the first attempt):**
+
+| Step | Result | Match |
+|---|---|---|
+| Ground truth (SQL) | 75.6486486486486486 | — |
+| `run_aggregation()` direct (bypassing extractor) | 75.6486486486486486 | ✅ Exact |
+| Full pipeline via `extract_constraints()` | Correctly extracted `club: 'Real Madrid'` | ✅ |
+
+Club filtering considered verified and complete.
