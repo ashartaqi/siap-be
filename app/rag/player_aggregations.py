@@ -88,7 +88,21 @@ def run_aggregation(db: Session, constraints: dict) -> dict | None:
         query = query.group_by(getattr(Player, group_by)).order_by(agg_expr.desc())
 
     if group_by:
-        rows = query.limit(20).all()  # cap grouped results, avoid dumping every
+        rows = query.limit(20).all()  # cap grouped results, avoid dumping every league/club
+        return {
+            "type": agg_type,
+            "field": field,
+            "group_by": group_by,
+            "results": [tuple(row) for row in rows],
+        }
+    else:
+        result = query.scalar()
+        return {
+            "type": agg_type,
+            "field": field,
+            "group_by": None,
+            "results": result,
+        }
 
 
 def format_aggregation_context(agg_result: dict) -> str:

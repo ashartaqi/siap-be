@@ -306,3 +306,37 @@ model-deprecation churn.
    multi-position phrasing, then verify the distinct() fix against the
    7222 ground truth for CM/CDM.
 7. Branch/PR strategy — still undecided (carried over from §5).
+
+
+### 7.7 Truncated function bug (found post-commit) and final verification
+
+After committing §7's work, a fourth aggregation shape (ungrouped `avg`) was
+tested and returned a bare `None` instead of a result dict. Root cause:
+`run_aggregation()`'s final `return` block (the `if group_by: ... else: ...`
+dict construction) had been dropped during a prior file save — the function
+fell straight through into `format_aggregation_context()`'s definition with
+no `return` statement for the non-grouped case, so Python implicitly
+returned `None`. This is the third instance of a partial/truncated file
+save in this project (previously: a missing `format_aggregation_context`
+function entirely, and a missing SORT INTENT section edit) — worth treating
+as a process risk going forward, not just a one-off typo. Recommend a full
+`cat`/`sed -n` review of any edited file immediately after saving, before
+testing against it.
+
+Fixed by restoring the missing return block. Verified for free (no API
+calls) two ways: directly via `run_aggregation()` with hand-built
+constraints, and independently via a raw SQLAlchemy query bypassing the
+aggregation module entirely. Both returned 64.0336798336798337, matching
+exactly.
+
+**All four aggregation shapes now verified against ground truth:**
+
+| Shape | Question / constraints | Ground truth | Result | Match |
+|---|---|---|---|---|
+| count (filtered) | Left-footed strikers | 784 | 784 | ✅ |
+| avg, grouped | Avg defending by league | Premier League 57.81 (+ 4 more, exact order) | Same | ✅ |
+| max, ungrouped | Highest pace | 97 | 97 | ✅ |
+| avg, ungrouped | Avg overall rating (all players) | 64.0336798336798337 | Same | ✅ |
+
+Aggregation layer considered feature-complete and verified as of this
+entry.
