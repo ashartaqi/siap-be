@@ -365,3 +365,15 @@ on the first attempt):**
 | Full pipeline via `extract_constraints()` | Correctly extracted `club: 'Real Madrid'` | ✅ |
 
 Club filtering considered verified and complete.
+
+### 7.9 Compound superlative queries — transparency fix (not a full solve)
+
+**Problem (from §6.5, item 1):** questions combining a sortable quality with
+an unquantified one ("fast young strikers") had no good handling —
+sort_by only supports one field, so unstated qualifiers like "young" were
+silently dropped, or the model claimed "not enough information" outright
+(see original Phase 2 eval, question 0).
+
+**Design decision:** deliberately avoided building an automatic
+multi-field weighted ranking (e.g. combining pace + age into one score) —
+this would require an arbitrary weighting formula

@@ -56,6 +56,13 @@ Only set "aggregation" when the question clearly wants a computed number/summary
 NOT a list of specific players. If it wants specific players (even ranked), use
 sort_by instead, not aggregation. Do not set both in the same response.
 
+UNQUANTIFIED QUALIFIERS: if the question includes descriptive words that
+aren't captured by any other field above (e.g. "young" with no age stated,
+"creative", "versatile", "exciting", "underrated") — list them in
+"unquantified_qualifiers" exactly as used in the question. Only include
+words that genuinely add unaddressed meaning; don't list words already
+captured by position, sort_by, stats, etc.
+
 Return ONLY valid JSON, no markdown fences, no explanation, matching this shape:
 
 {{
@@ -73,7 +80,8 @@ Return ONLY valid JSON, no markdown fences, no explanation, matching this shape:
                         "positioning_min": integer, "reflexes_min": integer, "speed_min": integer}},
   "sort_by": "reflexes",
   "sort_direction": "desc",
-  "aggregation": {{"type": "avg", "field": "defending", "group_by": "league_name"}}
+  "aggregation": {{"type": "avg", "field": "defending", "group_by": "league_name"}},
+  "unquantified_qualifiers": ["young"]
 }}
 
 Question: {question}
