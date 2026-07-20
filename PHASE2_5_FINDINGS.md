@@ -377,3 +377,38 @@ silently dropped, or the model claimed "not enough information" outright
 **Design decision:** deliberately avoided building an automatic
 multi-field weighted ranking (e.g. combining pace + age into one score) —
 this would require an arbitrary weighting formula
+
+
+### 7.10 Entity disambiguation
+
+**Problem (§6.5, item 3 / original Phase 2 finding):** "Compare Messi and
+Ronaldo" previously either found no exact match and gave up, or matched
+wrong/multiple "Ronaldo"s without any resolution mechanism.
+
+**Design:** Added `player_names` extraction to `constraint_extractor.py`.
+New `find_player_name_matches()` in `player_filters.py` looks up players by
+`short_name` (deliberately not `long_name` — see bug below), ordered by
+`overall` descending so the most relevant/famous matches surface first.
+`service.py` checks name matches before any other retrieval path: zero
+matches -> tell the user the name wasn't found; multiple matches -> list
+real candidates with distinguishing info (nationality, club) and ask the
+user to clarify, rather than guessing.
+
+**Bug found during free verification:** initial version matched against
+`long_name` too (`OR long_name ILIKE ...`), which matched "Ronaldo" against
+many unrelated players who simply have "Ronaldo" as a middle/given name
+(e.g. "Ronaldo Jailson Cabrais Petri", commonly known as "Ronaldo
+Cabrais") —10+ false-positive matches, none of which included the actual
+well-known Ronaldos from the original eval. Fixed by matching `short_name`
+only (the commonly-used name) and ordering by `overall` descending.
+
+**Verified (real pipeline call, after two prior attempts were interrupted
+by transient 503s):** "Compare Messi and Ronaldo dribbling and passing"
+now correctly identifies real matches for both names (Lionel Messi at
+PSG; Cristiano Ronaldo at Al Nassr, listed first among 7 Ronaldo
+candidates) and asks the user to clarify which player they mean, instead
+of silently guessing or comparing the wrong players. Also correctly
+noted that dribbling/passing data wasn't available in the
+disambiguation-only context, rather than fabricating a comparison.
+
+Item 3 in §6.5 considered resolved.

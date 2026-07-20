@@ -136,3 +136,18 @@ def build_ranked_player_ids(db: Session, constraints: dict, top_k: int = 5) -> l
         return None
 
     return [row.id for row in query.limit(top_k).all()]
+
+
+def find_player_name_matches(db: Session, name: str) -> list[Player]:
+    """Finds players whose short_name matches the given name (partial,
+    case-insensitive). Used for entity disambiguation. Prioritizes
+    short_name since that's the commonly-known name a user would mean."""
+    pattern = f"%{name}%"
+    matches = (
+        db.query(Player)
+        .filter(Player.short_name.ilike(pattern))
+        .order_by(Player.overall.desc())
+        .limit(10)
+        .all()
+    )
+    return matches

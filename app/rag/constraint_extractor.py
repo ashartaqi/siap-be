@@ -25,6 +25,10 @@ CB, LB, RB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST, GK
 If the question names a specific club (e.g. "Real Madrid", "Man City", "Barcelona"), set "club" to
 that name exactly as stated in the question. Do not guess a club if none is named.
 
+NAMED PLAYERS: if the question refers to one or more specific players by name
+(e.g. "Messi", "Ronaldo", "Mbappé"), list them in "player_names" exactly as
+mentioned. Only include actual player names, not positions or clubs.
+
 SORT INTENT: if the question asks for the "best", "top", "fastest", "highest", "most" (etc.)
 players by some quality — rather than stating a hard numeric threshold — set "sort_by" to the
 single most relevant stat field, and "sort_direction" to "desc" (or "asc" for "worst"/"lowest").
@@ -72,6 +76,7 @@ Return ONLY valid JSON, no markdown fences, no explanation, matching this shape:
   "preferred_foot": "Left" or "Right",
   "nationality": string,
   "club": string,
+  "player_names": ["Messi", "Ronaldo"],
   "overall_min": integer,
   "overall_max": integer,
   "stats": {{"pace_min": integer, "shooting_min": integer, "passing_min": integer,
