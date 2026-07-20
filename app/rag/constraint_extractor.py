@@ -110,7 +110,8 @@ def extract_constraints(question: str) -> dict:
             result.pop("sort_by", None)
             result.pop("sort_direction", None)
 
+        result["_extraction_failed"] = False
         return result
     except Exception as e:
         logger.warning(f"Constraint extraction failed, falling back to vector search: {e}")
-        return {}
+        return {"_extraction_failed": True}

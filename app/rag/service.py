@@ -9,7 +9,15 @@ from app.models import DocumentEmbedding
 
 def ask_siap(db: Session, question: str) -> dict:
     constraints = extract_constraints(question)
+    extraction_failed = constraints.pop("_extraction_failed", False)
     unquantified = constraints.get("unquantified_qualifiers")
+
+    degraded_note = None
+    if extraction_failed:
+        degraded_note = (
+            "Note: constraint extraction was temporarily unavailable for this question, "
+            "so results below are from a broader search and may be less precise than usual."
+        )
 
     player_names = constraints.get("player_names")
     if player_names:
@@ -30,14 +38,13 @@ def ask_siap(db: Session, question: str) -> dict:
                 resolved_ids.append(matches[0].id)
 
         if ambiguous_or_missing:
-            context = "\n".join(ambiguous_or_missing)
-            answer = generate_answer(question, [context], unquantified)
-            return {"answer": answer, "sources": [context]}
+            contexts = ambiguous_or_missing
+            if degraded_note:
+                contexts = [degraded_note] + contexts
+            answer = generate_answer(question, contexts, unquantified)
+            return {"answer": answer, "sources": contexts, "degraded": extraction_failed}
 
         if resolved_ids:
-            # All names resolved to exactly one match each -- fetch them
-            # directly by ID rather than relying on vector search, which
-            # isn't guaranteed to surface every named player.
             docs = (
                 db.query(DocumentEmbedding)
                 .filter(
@@ -47,24 +54,24 @@ def ask_siap(db: Session, question: str) -> dict:
                 .all()
             )
             contexts = [d.content for d in docs]
+            if degraded_note:
+                contexts = [degraded_note] + contexts
             answer = generate_answer(question, contexts, unquantified)
-            return {"answer": answer, "sources": contexts}
+            return {"answer": answer, "sources": contexts, "degraded": extraction_failed}
 
     agg_result = run_aggregation(db, constraints)
     if agg_result is not None:
-        context = format_aggregation_context(agg_result)
-        answer = generate_answer(question, [context], unquantified)
-        return {
-            "answer": answer,
-            "sources": [context],
-        }
+        contexts = [format_aggregation_context(agg_result)]
+        if degraded_note:
+            contexts = [degraded_note] + contexts
+        answer = generate_answer(question, contexts, unquantified)
+        return {"answer": answer, "sources": contexts, "degraded": extraction_failed}
 
     results = retrieve_relevant_players(db, question, constraints, top_k=5)
     contexts = [r.content for r in results]
+    if degraded_note:
+        contexts = [degraded_note] + contexts
 
     answer = generate_answer(question, contexts, unquantified)
 
-    return {
-        "answer": answer,
-        "sources": contexts,
-    }
+    return {"answer": answer, "sources": contexts, "degraded": extraction_failed}

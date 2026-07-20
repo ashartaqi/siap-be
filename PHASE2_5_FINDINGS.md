@@ -445,3 +445,37 @@ noise — versus the previous vector-search path which returned 5 results
 including 2 unrelated "Ronaldo"s and an unrelated player. Comparison
 values (shooting 91 vs 89, passing 80 vs 76) are directly grounded in the
 retrieved data.
+
+### 7.12 Visible signal on extraction failure
+
+**Problem (§7.6/7.8, item 4, raised repeatedly since aggregation work):**
+when `extract_constraints()` fails (429, 503, etc.), the pipeline silently
+degrades to pure vector search with zero indication anything went wrong —
+directly implicated in at least two prior confidently-wrong answers this
+week ("72" instead of 97 for max pace; a wrong Ronaldo comparison).
+
+**Design:** `extract_constraints()` now returns an internal
+`_extraction_failed` flag alongside constraints (or `{"_extraction_failed":
+True}` on any exception). `service.py` reads and strips this flag, and:
+- includes a `degraded_note` as extra context passed to `generate_answer()`,
+  so the model has the option to caveat its answer accordingly
+- returns `degraded: <bool>` in every response dict — a reliable,
+  machine-readable signal independent of whether the LLM's prose happens
+  to mention the caveat, useful for a future frontend to show a visible
+  "reduced confidence" indicator
+
+**Bug found during verification:** initial `service.py` implementation
+referenced `contexts` in a note-prepending step before it was defined for
+the player-name/aggregation/fallback branches — an incomplete rewrite,
+not tested before being shared. Caught immediately by the free simulated-
+failure test (an `UnboundLocalError`, not a silent wrong answer) rather
+than surfacing later. Fixed with a complete rewrite ensuring every return
+path defines `contexts` before use.
+
+**Verified (zero-cost, via monkey-patched Gemini client, no real API
+calls):** simulated extraction failure correctly produces `degraded: True`
+in the response, no crash, and a context-aware note is passed to
+generation (though the model doesn't always foreground it in prose --
+the reliable signal is the `degraded` flag itself, not the answer text).
+
+Item 4 (originally raised across §7.6/7.8) considered resolved.
