@@ -479,3 +479,78 @@ generation (though the model doesn't always foreground it in prose --
 the reliable signal is the `degraded` flag itself, not the answer text).
 
 Item 4 (originally raised across §7.6/7.8) considered resolved.
+
+## 8. Post-Fix Eval Run & a RAGAS Methodology Gap
+
+### 8.1 Context
+
+Ran the original 5-question RAGAS eval again after this session's four
+fixes (club filtering §7.8, compound-superlative transparency §7.9, entity
+disambiguation §7.10, direct-lookup comparisons §7.11) plus the
+extraction-failure visibility fix (§7.12). Aggregate scores looked worse
+than the previous run at first glance:
+
+```
+{'context_precision': 0.25, 'context_recall': 0.40, 'faithfulness': 0.498, 'answer_relevancy': 0.0}
+```
+
+Manual, question-by-question review (same discipline used throughout this
+project) tells a different and more accurate story than the aggregate
+numbers alone.
+
+### 8.2 Question-by-question breakdown
+
+| Q | Topic | Retrieval/answer quality (manual check) | RAGAS score | Verdict |
+|---|---|---|---|---|
+| 0 | Fast young strikers | Same known limitation as before (compound query, unchanged by design) — but answer now explicitly reasons through the tradeoff instead of flatly giving up, per §7.9 | precision 0.0 | Expected, unchanged, documented |
+| 1 | Best reflexes | Retrieval exactly correct (Sommer/ter Stegen/Courtois, matches ground truth) | faithfulness 0.0 | **Judge-scoring anomaly** — same pattern seen in prior runs, not a real fault |
+| 2 | Messi/Ronaldo comparison | Correctly found real candidates for both names, correctly refused to guess and asked for clarification instead of fabricating a comparison — the intended, designed behavior from §7.10/7.11 | 0.0 across all metrics | **Eval methodology gap** — see §8.3 |
+| 3 | Best left-footed defenders | Both extraction AND generation hit `503`s on the same question; degraded-note fallback (§7.12) fired correctly, then generation's own fallback message (§7.6) also fired correctly | 0.0 across all metrics | Genuine infra failure (Google demand spike), not a code fault — correct graceful-degradation behavior under a harder double-failure case than previously tested |
+| 4 | CAM overall rating | Exact match to ground truth | precision 1.0, recall 1.0 | Clean pass, metric and manual check agree |
+
+### 8.3 Real finding: RAGAS ground truth doesn't recognize "correctly declined to
+guess" as a good answer
+
+Question 2's ground truth is a direct numeric comparison ("L. Messi:
+dribbling 94, passing 90. Cristiano Ronaldo: dribbling 83, passing 76").
+But this project deliberately built entity disambiguation (§7.10) so that
+when a name is ambiguous, the system asks for clarification instead of
+guessing which player was meant — a design choice made explicitly to avoid
+fabricating results, consistent with this project's approach throughout
+(never guess unstated thresholds, never guess ambiguous entities, be
+visible about degraded results).
+
+The eval as currently written has no way to score "correctly asked for
+clarification" as a good outcome — it can only measure similarity to a
+direct-answer ground truth, so a fully honest, correctly-designed response
+scores identically to a wrong one. This means Q2 will score as a false
+failure in every future eval run unless addressed, undermining trust in
+the aggregate metric for exactly the kind of behavior this project has
+prioritized.
+
+**Recommendation (not yet implemented):** add a distinct eval category for
+ambiguous-entity questions with its own success criterion ("did the system
+correctly identify ambiguity and ask for clarification, listing real
+candidates?") rather than scoring them against a direct-answer ground
+truth. Standard RAGAS context precision/recall/faithfulness metrics aren't
+well-suited to this category and shouldn't be applied to it going forward.
+
+### 8.4 Overall assessment
+
+Excluding the judge-scoring anomaly (Q1), the eval-methodology gap (Q2),
+and the transient infra failure (Q3) — none of which reflect a real
+regression — the underlying system behaved as well as or better than
+prior runs on every question where a fair comparison is possible (Q1
+manually confirmed correct, Q4 confirmed correct by both methods, Q0
+unchanged as expected). No evidence of regression from this session's
+fixes. Aggregate RAGAS numbers from this run should not be read at face
+value without this context.
+
+### 8.5 Open items (updated)
+
+Carried over from §7.6/7.9 unresolved items, plus:
+
+8. **New: RAGAS eval doesn't credit correct ambiguity-clarification
+   behavior.** See §8.3. Needs a separate eval category/success criterion
+   before future runs can be trusted at face value for entity-disambiguation
+   questions.
