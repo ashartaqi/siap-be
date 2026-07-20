@@ -139,10 +139,12 @@ def build_ranked_player_ids(db: Session, constraints: dict, top_k: int = 5) -> l
 
 
 def find_player_name_matches(db: Session, name: str) -> list[Player]:
-    """Finds players whose short_name matches the given name (partial,
-    case-insensitive). Used for entity disambiguation. Prioritizes
-    short_name since that's the commonly-known name a user would mean."""
+    """Finds players matching the given name. Tries short_name first
+    (handles single distinctive names like "Messi", "Ronaldo", "Mbappé").
+    Falls back to long_name for fuller names like "Kylian Mbappé" that
+    won't appear in a "K. Mbappé"-style short_name."""
     pattern = f"%{name}%"
+
     matches = (
         db.query(Player)
         .filter(Player.short_name.ilike(pattern))
@@ -150,4 +152,13 @@ def find_player_name_matches(db: Session, name: str) -> list[Player]:
         .limit(10)
         .all()
     )
-    return matches
+    if matches:
+        return matches
+
+    return (
+        db.query(Player)
+        .filter(Player.long_name.ilike(pattern))
+        .order_by(Player.overall.desc())
+        .limit(10)
+        .all()
+    )

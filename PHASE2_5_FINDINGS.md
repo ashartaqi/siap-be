@@ -412,3 +412,36 @@ noted that dribbling/passing data wasn't available in the
 disambiguation-only context, rather than fabricating a comparison.
 
 Item 3 in §6.5 considered resolved.
+
+### 7.11 Direct player lookup for named comparisons
+
+**Problem found while testing §7.10:** when player names resolve to
+exactly one match each (the "clean," non-ambiguous case), the system
+previously fell through to ordinary vector search rather than fetching
+those specific players directly. This worked by luck on famous pairs
+(both names appear in the question text, biasing embedding similarity
+toward them) but wasn't guaranteed — a top_k of 5 with several
+lexically-similar-but-irrelevant players could crowd out a genuinely
+named player.
+
+**Bug found and fixed along the way:** `find_player_name_matches()`
+initially searched `short_name` only (after the §7.10 long_name fix), but
+most players' `short_name` is "<Initial>. <Surname>" (e.g. "K. Mbappé"),
+which never matches a full first name search ("Kylian Mbappé"). Fixed by
+falling back to `long_name` search when `short_name` yields no match —
+while keeping the original §7.10 short_name-first approach for common
+single-name references ("Messi", "Ronaldo"), avoiding a regression to the
+original long_name false-positive problem (middle-name matches).
+
+**Design:** `service.py` now resolves all named players before choosing a
+retrieval path. If every name resolves to exactly one match, those
+players are fetched directly by ID (bypassing vector search entirely) —
+same "SQL is exact once identity is known" principle used elsewhere
+(sort-by, aggregation, club filtering).
+
+**Verified:** "Compare Cristiano Ronaldo and Kylian Mbappé shooting and
+passing" now returns exactly 2 sources — the correct two players, no
+noise — versus the previous vector-search path which returned 5 results
+including 2 unrelated "Ronaldo"s and an unrelated player. Comparison
+values (shooting 91 vs 89, passing 80 vs 76) are directly grounded in the
+retrieved data.
