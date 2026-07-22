@@ -1,7 +1,7 @@
 # Ask SIAP — Phase 2 Findings: RAGAS Evaluation
 
 **Date:** July 2026
-**Author:** Nafay
+**Author:** Syed Ali Nafay
 **Scope:** Evaluation of the Phase 1 pgvector retrieval baseline using RAGAS metrics, judged by Groq (`llama-3.3-70b-versatile`), against Gemini 2.5 Flash as the generation model.
 
 ---
