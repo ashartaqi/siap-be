@@ -554,3 +554,117 @@ Carried over from §7.6/7.9 unresolved items, plus:
    behavior.** See §8.3. Needs a separate eval category/success criterion
    before future runs can be trusted at face value for entity-disambiguation
    questions.
+
+## 9. TruLens Integration — Attempted, API Discovered, Shelved
+
+### 9.1 Goal
+
+Integrate TruLens (RAG triad: context relevance, groundedness, answer
+relevance) on top of the existing RAGAS harness, for per-pipeline-stage
+tracing and a second, independently-corroborating judge model. Not meant
+to replace RAGAS -- meant to add stage-level diagnosis ("which stage
+broke") on top of RAGAS's aggregate scores.
+
+### 9.2 What was built
+
+- `app/rag/tracing.py` -- three `Metric` objects (context relevance,
+  groundedness, answer relevance) wired to a Groq/Llama-3.3-70b provider
+  via `trulens-providers-litellm`, matching the existing RAGAS judge model
+  so scores are comparable.
+- `app/rag/instrumented_service.py` -- wraps (does not modify) every stage
+  of `service.py`'s `ask_siap()` as its own traced span: constraint
+  extraction, entity disambiguation, aggregation, retrieval, generation.
+- `app/rag/eval_trulens_runner.py` -- scaffolding to run the same 5-question
+  eval set used by the RAGAS harness through the TruLens-instrumented
+  pipeline.
+
+### 9.3 API discovery process (the actual hard part)
+
+`trulens-core` (installed: 2.8.1) has undergone significant API churn --
+the currently-installed version differs substantially from most publicly
+documented examples, including the deprecated `trulens-eval` package and
+even some patterns suggested by the package's own deprecation warnings.
+Getting a working `Metric` construction required roughly a dozen corrected
+guesses, each narrowed by directly inspecting the installed package via
+`inspect.signature()`, `dir()`, and deliberately triggering errors rather
+than trusting documentation or plausible-looking API guesses. Confirmed,
+working facts about `trulens-core==2.8.1`, `trulens-providers-litellm==2.8.1`,
+`trulens-dashboard==2.9.0`:
+
+- `Feedback` is deprecated in favor of `Metric` (`from trulens.core import
+  Metric`). `Feedback(...).on(Selector(...))` style chaining raises
+  `ValueError: OTEL mode only supports a single positional argument to
+  \`on\`` and is not the current pattern.
+- The correct pattern is `Metric(implementation=provider.some_method)`
+  followed by convenience methods: `.on_input()`, `.on_output()`,
+  `.on_input_output()`, `.on_context(collect_list=bool)`. These chain
+  together (e.g. `.on_input().on_context(collect_list=False)`) and bind
+  to the provider function's parameters *positionally*, not by matching
+  names -- e.g. `groundedness_measure_with_cot_reasons(source, statement)`
+  binds correctly via `.on_context().on_output()` despite the parameter
+  names not being "context"/"output".
+- `instrument` must be imported from `trulens.core.otel.instrument`
+  (a class, constructed per-use with `span_type`/`name`/`attributes`
+  kwargs) -- not from `trulens.apps.app` or `trulens.apps.custom`, which
+  export a different, pre-instantiated default instance that only accepts
+  a bare function with no config.
+- `SpanAttributes.SpanType` is a fixed enum (`unknown`, `record_root`,
+  `retrieval`, `generation`, `aggregation` is NOT in this enum -- custom
+  pipeline stages should use `SpanType.UNKNOWN` with a descriptive `name=`
+  instead of inventing new span types).
+- `SpanAttributes.GENERATION` has no `INPUT`/`OUTPUT` sub-attributes --
+  those live under `SpanAttributes.RECORD_ROOT.INPUT`/`.OUTPUT` instead,
+  which represents the whole record's input/output, not a per-span
+  attribute.
+- Feedback computation runs **asynchronously** in a background evaluator
+  thread. Reading results immediately after the `with tru_app as
+  recording:` block races that computation -- some scores will genuinely
+  be `NaN` because they haven't been computed yet, and exiting before
+  they finish raises `RuntimeError: cannot schedule new futures after
+  interpreter shutdown` in the background thread. Fix:
+  `session.wait_for_feedback_results(record_ids, feedback_names,
+  timeout=...)` before reading/printing results.
+
+### 9.4 Real, working result achieved
+
+With all of the above corrected, the pipeline traced successfully end to
+end for at least one question ("Which goalkeepers have the best
+reflexes?"): the correct answer was produced (matching the same verified
+ground truth used throughout this project), and genuine, non-NaN feedback
+scores were computed and attached to records (`relevance_with_cot_reasons`
+showing real `0.0`/`1.0` values, not universal failures).
+
+### 9.5 Remaining problem -- why this is being shelved for now
+
+TruLens's automatic span-content inference does not reliably know how to
+extract a meaningful "input"/"output" from spans that aren't
+naturally answer-shaped -- specifically `_traced_aggregation`, which
+returns `None` (no aggregation needed) or a raw dict, not natural-language
+text. Observed concretely: the `answer_relevance` metric was applied to
+the aggregation span's constraints argument for a non-aggregation
+question, producing a technically-well-formed but meaningless score (the
+judge correctly scored `['GK']` as irrelevant to "which goalkeepers have
+the best reflexes?", but `['GK']` was never meant to be scored as an
+answer in the first place -- it's an internal argument fragment).
+
+Fixing this properly requires deliberately scoping each `Metric` to only
+the spans it's actually meant to evaluate (e.g. answer relevance should
+only ever look at the `generation` span's record-level output, never at
+intermediate stages like aggregation or disambiguation) -- a real design
+task, not a quick patch, and one that risks further extended API-discovery
+sessions given how much guessing was required to get this far.
+
+### 9.6 Decision
+
+Shelved for now. The existing RAGAS harness plus manual ground-truth
+verification (the primary method used to verify every fix across
+Phase 2.5) remain the trusted evaluation tools for actual decisions about
+Ask SIAP's retrieval/answer quality. TruLens integration is a legitimate
+future enhancement (real per-stage tracing has genuine value once
+metric-to-span scoping is done correctly) but is evaluation *tooling*,
+not a fix to the chatbot itself -- lower priority than closing remaining
+answer-quality gaps or reliability/deployment work.
+
+All code (`tracing.py`, `instrumented_service.py`, `eval_trulens_runner.py`,
+`test_trulens_single.py`) is left in place, functional as documented above,
+for whoever picks this back up.
