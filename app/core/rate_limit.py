@@ -6,6 +6,9 @@ from app.core.security import decode_access_token, settings
 DEFAULT_LIMIT = "90/minute"
 AUTH_LIMIT = "20/minute"
 REFRESH_LIMIT = "10/minute"
+ASK_LIMIT = "5/minute"  # /ask is expensive (Gemini + Groq calls against daily
+                         # free-tier quotas), needs a much stricter cap than
+                         # typical CRUD endpoints
 
 def _get_client_key(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
