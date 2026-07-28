@@ -1,8 +1,11 @@
 import os
+import logging
 from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
@@ -18,8 +21,12 @@ def generate_answer(question: str, contexts: list[str]) -> str:
         f"Question: {question}"
     )
 
-    response = _client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-    )
-    return response.text
+    try:
+        response = _client.models.generate_content(
+            model="gemini-flash-latest",
+            contents=prompt,
+        )
+        return response.text
+    except Exception as e:
+        logger.warning(f"Generation failed: {e}")
+        return "Sorry, I couldn't generate an answer right now — please try again in a moment."

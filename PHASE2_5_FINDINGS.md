@@ -95,7 +95,7 @@ treated as directionally reliable, not perfectly clean.
    entirely for obviously unconstrained questions, to reduce Gemini calls
    per query (currently 2 per question) given free-tier daily caps.
 
-   ## 6. Sort-Intent Detection (Ranking Queries)
+## 6. Sort-Intent Detection (Ranking Queries)
 
 ### 6.1 Motivation
 
@@ -173,10 +173,20 @@ infrastructure failures this run.
 1. **Compound superlative + unstated-threshold queries** ("fast young
    strikers") — current `sort_by` design only handles a single ranking field;
    does not combine with implicit secondary qualifiers. Not yet solved.
-2. **Ambiguous "best" without a named stat** — e.g. "best defenders" defaults
-   to `overall`, but may reasonably mean the position-relevant stat
-   (`defending` for CB/LB). Worth deciding whether to bias `sort_by` toward a
-   position-appropriate stat when the question doesn't name one explicitly.
+2. ~~Ambiguous "best" without a named stat~~ — **Resolved.** Updated the
+   SORT INTENT prompt section to prefer a role-appropriate stat over
+   `overall` when the question implies one through role/position (e.g.
+   "best defenders" -> `defending`, "fastest players" -> `pace`), only
+   falling back to `overall` for genuinely general questions ("best players
+   overall"). Verified: "Who are the best left-footed defenders?" now
+   extracts `sort_by: defending` (previously `overall`) and the full
+   pipeline returns an exact match to ground truth (Bastoni, Laporte, Alaba,
+   Chiellini, Acerbi — same 5 names and defending values, tie order among
+   the 86s not deterministic). Note: the extractor now also returns a wider
+   position set (`CB, LB, RB, CDM`) for "defenders" than the original eval's
+   ground truth assumed (`CB, LB`) — a reasonable broadening, and confirmed
+   not to change this particular result, but worth being aware of if other
+   "defender" questions score differently than expected in future evals.
 3. **Judge-model infra reliability** — two eval runs in a row have lost a
    meaningful fraction of judge-scoring jobs to Groq free-tier rate/token
    limits (5/20, then 8/20). Aggregate RAGAS numbers should be treated as
@@ -186,3 +196,147 @@ infrastructure failures this run.
 4. Entity disambiguation ("which Ronaldo") — unrelated to retrieval strategy,
    separate future problem.
 5. Branch/PR strategy — still undecided (see §5, carried over).
+
+## 7. Aggregation Layer (Count / Average / Group-By Queries)
+
+### 7.1 Motivation
+
+Neither hard-constraint filtering nor sort-intent detection can answer
+questions requiring a computed summary across many players — "how many
+left-footed strikers are there," "which league has the highest average
+defending rating." These require SQL aggregation (COUNT/AVG/GROUP BY), not
+retrieval of any set of individual player documents, however well-ranked.
+Attempting to answer these via document retrieval risks the LLM fabricating
+a plausible-sounding but ungrounded number from a handful of retrieved rows.
+
+### 7.2 Design
+
+Extended `constraint_extractor.py` with an `aggregation` field
+(`type`: count/avg/max/min/sum, `field`: the stat column, `group_by`: an
+optional grouping dimension). Added `player_aggregations.py`, executing a
+direct SQLAlchemy aggregate query and returning real computed numbers — no
+LLM involved in the computation itself. `service.py` checks aggregation
+intent first (reusing the single `extract_constraints()` call already made
+for retrieval, avoiding a duplicate Gemini call); if present, routes to
+`run_aggregation()` and formats the result as plain-text context for
+`generate_answer()`, preserving the "answer only from provided context"
+discipline for aggregated numbers too.
+
+### 7.3 Bugs found and fixed during verification
+
+Following the same call-per-step discipline as sort-by (§6), three distinct
+bugs were found and fixed, each on a different code path's first real test:
+
+1. **Filter bypass (count queries).** `run_aggregation()` initially never
+   applied position/foot/age constraints to the count path — a count query
+   for "left-footed strikers" returned 31,265 (the entire player table)
+   instead of the correct 784. Root cause: the function never called the
+   existing `_apply_shared_filters()` helper already used by the filter and
+   sort paths. Fixed by reusing that helper directly rather than
+   duplicating filter logic.
+2. **GROUP BY column mismatch (grouped queries).** Selecting both
+   `Club.name` and `Club.league_name` while grouping only by
+   `Club.league_name` violates SQL's GROUP BY rules (every non-aggregated
+   SELECT column must appear in GROUP BY). Fixed by selecting only the
+   columns relevant to each specific grouping level.
+3. **Missing query anchor (ungrouped stat queries).** A bare aggregate
+   expression with no `group_by` (e.g. `MAX(pace)`) gave SQLAlchemy no
+   entity to join `PlayerStats` from, raising
+   `InvalidRequestError: Don't know how to join`. Fixed with an explicit
+   `.select_from(Player)` anchor for the ungrouped case.
+
+### 7.4 Verification (against direct-SQL ground truth, same method as Phase 2)
+
+| Question | Ground truth (direct SQL) | Ask SIAP result | Match |
+|---|---|---|---|
+| "How many left-footed strikers are there?" | 784 | 784 | ✅ Exact |
+| "Which league has the highest average defending rating?" | Premier League 57.81, Serie A 57.67, La Liga 56.90, Bundesliga 56.29, Russian Premier League 56.06 | Same 5 leagues, same values, same order | ✅ Exact |
+| "What is the highest pace in the database?" | 97 | 97 | ✅ Exact |
+
+All three distinct aggregation code paths (plain count, grouped average,
+ungrouped max) are now verified correct, not just "runs without error."
+
+### 7.5 Infrastructure note (unrelated to aggregation logic itself)
+
+Testing this session repeatedly hit transient `503 UNAVAILABLE` ("model
+experiencing high demand") errors from `gemini-flash-latest`. Confirmed this
+is a Google-side, account-independent issue, not a bug in the pipeline.
+`constraint_extractor.py`'s existing fail-open design handled this
+correctly (falls back to `{}`, logs a warning) — but this exposed a real,
+separate gap: when extraction fails and constraints come back empty, the
+pipeline falls through to pure vector search even for clearly
+aggregation-style questions, which can produce a fluent but completely
+wrong answer (e.g. "72" instead of failing loudly, when the real answer was
+97) with no visible indication to the user that retrieval silently
+degraded. Additionally, `generation.py` has no error handling at all — a
+`503` there crashes the request outright. Both are logged as open items
+below, not yet fixed.
+
+Separately: `gemini-2.5-flash` (used throughout this project until now)
+began returning account-wide 404s as "no longer available," matching a
+publicly reported Google-side issue rather than anything specific to this
+project. Migrated both `constraint_extractor.py` and `generation.py` to
+`gemini-flash-latest`, an alias Google maintains to track their current
+recommended Flash model — chosen specifically to reduce exposure to future
+model-deprecation churn.
+
+### 7.6 Open items (carried over + new)
+
+1. Compound superlative + unstated-threshold queries (§6.5, still open).
+2. Judge-model (Groq) infra reliability for RAGAS evals (§6.5, still open).
+3. Entity disambiguation ("which Ronaldo") — still open, unrelated to
+   retrieval/aggregation design.
+4. **New: silent degradation on extraction failure.** When
+   `extract_constraints()` fails (rate limit, 503, etc.), aggregation and
+   hybrid-filter intent are both lost, and the question falls through to
+   pure vector search with no signal to the caller that this happened.
+   Worth considering a distinguishable "low confidence" flag in the
+   response when this occurs, rather than degrading silently.
+5. ~~generation.py has no error handling~~ — **Resolved.** Added a
+   try/except with logging around the generate_content call; verified via
+   simulated failure (zero API cost): logs the real error and returns a
+   graceful fallback message instead of crashing the request.
+6. Multi-position double-counting (count queries) -- .distinct() fix applied
+   in code, but NOT yet empirically verified. Attempted test ("How many
+   midfielders playing CM or CDM are there?") did not exercise the intended
+   path -- constraints did not resolve to aggregation intent (or extraction
+   itself failed silently to a 503, indistinguishable from this output alone),
+   and the question fell through to filtered retrieval instead. Still an
+   open item: confirm extraction correctly detects count-intent for
+   multi-position phrasing, then verify the distinct() fix against the
+   7222 ground truth for CM/CDM.
+7. Branch/PR strategy — still undecided (carried over from §5).
+
+
+### 7.7 Truncated function bug (found post-commit) and final verification
+
+After committing §7's work, a fourth aggregation shape (ungrouped `avg`) was
+tested and returned a bare `None` instead of a result dict. Root cause:
+`run_aggregation()`'s final `return` block (the `if group_by: ... else: ...`
+dict construction) had been dropped during a prior file save — the function
+fell straight through into `format_aggregation_context()`'s definition with
+no `return` statement for the non-grouped case, so Python implicitly
+returned `None`. This is the third instance of a partial/truncated file
+save in this project (previously: a missing `format_aggregation_context`
+function entirely, and a missing SORT INTENT section edit) — worth treating
+as a process risk going forward, not just a one-off typo. Recommend a full
+`cat`/`sed -n` review of any edited file immediately after saving, before
+testing against it.
+
+Fixed by restoring the missing return block. Verified for free (no API
+calls) two ways: directly via `run_aggregation()` with hand-built
+constraints, and independently via a raw SQLAlchemy query bypassing the
+aggregation module entirely. Both returned 64.0336798336798337, matching
+exactly.
+
+**All four aggregation shapes now verified against ground truth:**
+
+| Shape | Question / constraints | Ground truth | Result | Match |
+|---|---|---|---|---|
+| count (filtered) | Left-footed strikers | 784 | 784 | ✅ |
+| avg, grouped | Avg defending by league | Premier League 57.81 (+ 4 more, exact order) | Same | ✅ |
+| max, ungrouped | Highest pace | 97 | 97 | ✅ |
+| avg, ungrouped | Avg overall rating (all players) | 64.0336798336798337 | Same | ✅ |
+
+Aggregation layer considered feature-complete and verified as of this
+entry.
