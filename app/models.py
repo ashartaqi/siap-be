@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, func, Foreign
 from sqlalchemy.orm import relationship
 from app.core.db import Base
 from app.constants import INITIAL_BB_BALANCE
+from pgvector.sqlalchemy import Vector
 
 class User(Base):
     __tablename__ = "users"
@@ -271,4 +272,15 @@ class UnlockedPlayer(Base):
 
     user = relationship("User")
     player = relationship("Player")
+
+
+class DocumentEmbedding(Base):
+    __tablename__ = "document_embeddings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_type = Column(String, nullable=False, index=True)
+    source_id = Column(Integer, nullable=False, index=True)
+    content = Column(String, nullable=False)
+    embedding = Column(Vector(384), nullable=False)
+    created_at = Column(DateTime, default=func.now())
 

@@ -433,3 +433,12 @@ class MatchSimulationResult(BaseModel):
     winner: Literal["me", "opponent", "draw"]
     reward: int
     new_balance: int
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+class AskResponse(BaseModel):
+    answer: str
+    sources: List[str]
