@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import logging
 from google import genai
 from dotenv import load_dotenv
@@ -14,6 +15,16 @@ VALID_SORT_FIELDS = {
     "overall", "pace", "shooting", "passing", "dribbling", "defending", "physic",
     "diving", "handling", "kicking", "positioning", "reflexes", "speed",
 }
+
+RETRYABLE_ERROR_MARKERS = ("503", "UNAVAILABLE", "overloaded")
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 3
+
+
+def _is_retryable(error: Exception) -> bool:
+    msg = str(error)
+    return any(marker in msg for marker in RETRYABLE_ERROR_MARKERS)
+
 
 EXTRACTION_PROMPT = """You are a constraint extraction engine for a football player database.
 Extract ONLY the structured filters explicitly stated in the question below.
@@ -95,23 +106,30 @@ Question: {question}
 
 def extract_constraints(question: str) -> dict:
     prompt = EXTRACTION_PROMPT.format(question=question)
-    try:
-        response = _client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=prompt,
-        )
-        raw = response.text.strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
-        result = json.loads(raw)
 
-        if result.get("sort_by") and result["sort_by"] not in VALID_SORT_FIELDS:
-            logger.warning(f"Extractor returned invalid sort_by: {result['sort_by']!r}, dropping")
-            result.pop("sort_by", None)
-            result.pop("sort_direction", None)
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = _client.models.generate_content(
+                model="gemini-flash-latest",
+                contents=prompt,
+            )
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                raw = raw.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
+            result = json.loads(raw)
 
-        result["_extraction_failed"] = False
-        return result
-    except Exception as e:
-        logger.warning(f"Constraint extraction failed, falling back to vector search: {e}")
-        return {"_extraction_failed": True}
+            if result.get("sort_by") and result["sort_by"] not in VALID_SORT_FIELDS:
+                logger.warning(f"Extractor returned invalid sort_by: {result['sort_by']!r}, dropping")
+                result.pop("sort_by", None)
+                result.pop("sort_direction", None)
+
+            return result
+        except Exception as e:
+            last_error = e
+            if _is_retryable(e) and attempt < MAX_RETRIES:
+                logger.warning(f"Extraction attempt {attempt} failed with retryable error, retrying: {e}")
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+            logger.warning(f"Constraint extraction failed, falling back to vector search: {e}")
+            return {"_extraction_failed": True}

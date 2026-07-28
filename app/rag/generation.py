@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from google import genai
 from dotenv import load_dotenv
@@ -8,6 +9,15 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+RETRYABLE_ERROR_MARKERS = ("503", "UNAVAILABLE", "overloaded")
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 3
+
+
+def _is_retryable(error: Exception) -> bool:
+    msg = str(error)
+    return any(marker in msg for marker in RETRYABLE_ERROR_MARKERS)
 
 
 def generate_answer(question: str, contexts: list[str], unquantified_qualifiers: list[str] | None = None) -> str:
@@ -32,12 +42,21 @@ def generate_answer(question: str, contexts: list[str], unquantified_qualifiers:
         f"Question: {question}"
     )
 
-    try:
-        response = _client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=prompt,
-        )
-        return response.text
-    except Exception as e:
-        logger.warning(f"Generation failed: {e}")
-        return "Sorry, I couldn't generate an answer right now — please try again in a moment."
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = _client.models.generate_content(
+                model="gemini-flash-latest",
+                contents=prompt,
+            )
+            return response.text
+        except Exception as e:
+            last_error = e
+            if _is_retryable(e) and attempt < MAX_RETRIES:
+                logger.warning(f"Generation attempt {attempt} failed with retryable error, retrying: {e}")
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+            logger.warning(f"Generation failed (attempt {attempt}/{MAX_RETRIES}): {e}")
+            break
+
+    return "Sorry, I couldn't generate an answer right now — please try again in a moment."
