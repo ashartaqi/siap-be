@@ -668,3 +668,61 @@ answer-quality gaps or reliability/deployment work.
 All code (`tracing.py`, `instrumented_service.py`, `eval_trulens_runner.py`,
 `test_trulens_single.py`) is left in place, functional as documented above,
 for whoever picks this back up.
+
+
+## 10. Rate Limiting on /ask
+
+### 10.1 Problem
+The `/ask` endpoint had no dedicated rate limit, despite each call costing
+2 Gemini requests against a ~20/day free-tier quota (plus a CPU-bound
+embedding step). The app's existing `slowapi`-based rate limiter
+(`app/core/rate_limit.py`, Redis-backed, already wired into `main.py`)
+only applied its `DEFAULT_LIMIT` (90/minute) globally -- generous enough
+for typical CRUD endpoints, but high enough to let a single user or bug
+exhaust the entire daily Gemini quota in under a minute.
+
+### 10.2 Fix
+Added `ASK_LIMIT = "5/minute"` to `rate_limit.py`, applied via
+`@limiter.limit(ASK_LIMIT)` on the `/ask` route specifically. Required
+adding a `Request` parameter to the route function (a `slowapi`
+requirement) and renaming the body parameter to avoid a name collision.
+
+### 10.3 Verification
+Confirmed via direct `curl` loop against a running local server: 7
+consecutive calls to `/ask` returned `200, 200, 200, 200, 200, 429, 429` --
+exactly the expected 5-then-blocked pattern. After waiting for the
+per-minute window to reset, a follow-up call confirmed the underlying
+pipeline still works correctly post-rate-limiting (784 left-footed
+strikers, matching ground truth exactly) -- confirming the fix blocks
+excess requests without breaking correctness for allowed ones.
+
+Note: this verification itself consumed real quota (~10 Gemini calls
+across 5 successful test requests) -- factored into that session's
+quota budget.
+
+## 11. Retry-with-Backoff for Transient Failures
+
+### 11.1 Problem
+Both `constraint_extractor.py` and `generation.py` previously treated
+every exception identically -- a single failed call immediately
+triggered the fallback path (degraded flag, or "couldn't generate an
+answer"). Repeated sessions this project showed `503` "experiencing
+high demand" errors are usually transient and often succeed on an
+immediate retry.
+
+### 11.2 Fix
+Added a retry loop (max 3 attempts, 3s delay) to both files, gated by an
+`_is_retryable()` check that only retries on markers indicating a
+transient/server-side issue (`503`, `UNAVAILABLE`, `overloaded`) --
+explicitly does NOT retry on quota exhaustion (`429`) or bad-request
+errors (`404`), since retrying those wastes calls without any chance of
+success.
+
+### 11.3 Verification
+Verified on both files via controlled failure injection (monkey-patching
+the client to fail on the first call, succeed on the second, using the
+real API for the successful attempt): both correctly logged a retry
+warning, made exactly 2 calls, and returned the correct result --
+`constraint_extractor.py` returning the expected extraction for "How many
+left-footed strikers are there?", `generation.py` returning a real
+(context-appropriate) answer.
