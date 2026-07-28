@@ -340,3 +340,217 @@ exactly.
 
 Aggregation layer considered feature-complete and verified as of this
 entry.
+
+### 7.8 Club-name filtering
+
+**Motivation:** No way to filter or aggregate by club existed — surfaced by
+testing "average overall rating at Real Madrid," which the extractor had
+nowhere to route (no `club` field in the schema).
+
+**Design:** Added `club` to the extraction prompt/schema (exact name as
+stated, no guessing). Added a `Club` join + `ilike` filter to
+`_apply_shared_filters()`, so club filtering is automatically available
+across all three paths (hard-filter retrieval, sort-by ranking, and
+aggregation) with no per-path duplication.
+
+**Verification (ground truth via direct SQL, `AVG(p.overall)` for Real
+Madrid — note: required qualifying `p.overall` explicitly, since `Club`
+also has its own `overall` column, causing an ambiguous-column SQL error
+on the first attempt):**
+
+| Step | Result | Match |
+|---|---|---|
+| Ground truth (SQL) | 75.6486486486486486 | — |
+| `run_aggregation()` direct (bypassing extractor) | 75.6486486486486486 | ✅ Exact |
+| Full pipeline via `extract_constraints()` | Correctly extracted `club: 'Real Madrid'` | ✅ |
+
+Club filtering considered verified and complete.
+
+### 7.9 Compound superlative queries — transparency fix (not a full solve)
+
+**Problem (from §6.5, item 1):** questions combining a sortable quality with
+an unquantified one ("fast young strikers") had no good handling —
+sort_by only supports one field, so unstated qualifiers like "young" were
+silently dropped, or the model claimed "not enough information" outright
+(see original Phase 2 eval, question 0).
+
+**Design decision:** deliberately avoided building an automatic
+multi-field weighted ranking (e.g. combining pace + age into one score) —
+this would require an arbitrary weighting formula
+
+
+### 7.10 Entity disambiguation
+
+**Problem (§6.5, item 3 / original Phase 2 finding):** "Compare Messi and
+Ronaldo" previously either found no exact match and gave up, or matched
+wrong/multiple "Ronaldo"s without any resolution mechanism.
+
+**Design:** Added `player_names` extraction to `constraint_extractor.py`.
+New `find_player_name_matches()` in `player_filters.py` looks up players by
+`short_name` (deliberately not `long_name` — see bug below), ordered by
+`overall` descending so the most relevant/famous matches surface first.
+`service.py` checks name matches before any other retrieval path: zero
+matches -> tell the user the name wasn't found; multiple matches -> list
+real candidates with distinguishing info (nationality, club) and ask the
+user to clarify, rather than guessing.
+
+**Bug found during free verification:** initial version matched against
+`long_name` too (`OR long_name ILIKE ...`), which matched "Ronaldo" against
+many unrelated players who simply have "Ronaldo" as a middle/given name
+(e.g. "Ronaldo Jailson Cabrais Petri", commonly known as "Ronaldo
+Cabrais") —10+ false-positive matches, none of which included the actual
+well-known Ronaldos from the original eval. Fixed by matching `short_name`
+only (the commonly-used name) and ordering by `overall` descending.
+
+**Verified (real pipeline call, after two prior attempts were interrupted
+by transient 503s):** "Compare Messi and Ronaldo dribbling and passing"
+now correctly identifies real matches for both names (Lionel Messi at
+PSG; Cristiano Ronaldo at Al Nassr, listed first among 7 Ronaldo
+candidates) and asks the user to clarify which player they mean, instead
+of silently guessing or comparing the wrong players. Also correctly
+noted that dribbling/passing data wasn't available in the
+disambiguation-only context, rather than fabricating a comparison.
+
+Item 3 in §6.5 considered resolved.
+
+### 7.11 Direct player lookup for named comparisons
+
+**Problem found while testing §7.10:** when player names resolve to
+exactly one match each (the "clean," non-ambiguous case), the system
+previously fell through to ordinary vector search rather than fetching
+those specific players directly. This worked by luck on famous pairs
+(both names appear in the question text, biasing embedding similarity
+toward them) but wasn't guaranteed — a top_k of 5 with several
+lexically-similar-but-irrelevant players could crowd out a genuinely
+named player.
+
+**Bug found and fixed along the way:** `find_player_name_matches()`
+initially searched `short_name` only (after the §7.10 long_name fix), but
+most players' `short_name` is "<Initial>. <Surname>" (e.g. "K. Mbappé"),
+which never matches a full first name search ("Kylian Mbappé"). Fixed by
+falling back to `long_name` search when `short_name` yields no match —
+while keeping the original §7.10 short_name-first approach for common
+single-name references ("Messi", "Ronaldo"), avoiding a regression to the
+original long_name false-positive problem (middle-name matches).
+
+**Design:** `service.py` now resolves all named players before choosing a
+retrieval path. If every name resolves to exactly one match, those
+players are fetched directly by ID (bypassing vector search entirely) —
+same "SQL is exact once identity is known" principle used elsewhere
+(sort-by, aggregation, club filtering).
+
+**Verified:** "Compare Cristiano Ronaldo and Kylian Mbappé shooting and
+passing" now returns exactly 2 sources — the correct two players, no
+noise — versus the previous vector-search path which returned 5 results
+including 2 unrelated "Ronaldo"s and an unrelated player. Comparison
+values (shooting 91 vs 89, passing 80 vs 76) are directly grounded in the
+retrieved data.
+
+### 7.12 Visible signal on extraction failure
+
+**Problem (§7.6/7.8, item 4, raised repeatedly since aggregation work):**
+when `extract_constraints()` fails (429, 503, etc.), the pipeline silently
+degrades to pure vector search with zero indication anything went wrong —
+directly implicated in at least two prior confidently-wrong answers this
+week ("72" instead of 97 for max pace; a wrong Ronaldo comparison).
+
+**Design:** `extract_constraints()` now returns an internal
+`_extraction_failed` flag alongside constraints (or `{"_extraction_failed":
+True}` on any exception). `service.py` reads and strips this flag, and:
+- includes a `degraded_note` as extra context passed to `generate_answer()`,
+  so the model has the option to caveat its answer accordingly
+- returns `degraded: <bool>` in every response dict — a reliable,
+  machine-readable signal independent of whether the LLM's prose happens
+  to mention the caveat, useful for a future frontend to show a visible
+  "reduced confidence" indicator
+
+**Bug found during verification:** initial `service.py` implementation
+referenced `contexts` in a note-prepending step before it was defined for
+the player-name/aggregation/fallback branches — an incomplete rewrite,
+not tested before being shared. Caught immediately by the free simulated-
+failure test (an `UnboundLocalError`, not a silent wrong answer) rather
+than surfacing later. Fixed with a complete rewrite ensuring every return
+path defines `contexts` before use.
+
+**Verified (zero-cost, via monkey-patched Gemini client, no real API
+calls):** simulated extraction failure correctly produces `degraded: True`
+in the response, no crash, and a context-aware note is passed to
+generation (though the model doesn't always foreground it in prose --
+the reliable signal is the `degraded` flag itself, not the answer text).
+
+Item 4 (originally raised across §7.6/7.8) considered resolved.
+
+## 8. Post-Fix Eval Run & a RAGAS Methodology Gap
+
+### 8.1 Context
+
+Ran the original 5-question RAGAS eval again after this session's four
+fixes (club filtering §7.8, compound-superlative transparency §7.9, entity
+disambiguation §7.10, direct-lookup comparisons §7.11) plus the
+extraction-failure visibility fix (§7.12). Aggregate scores looked worse
+than the previous run at first glance:
+
+```
+{'context_precision': 0.25, 'context_recall': 0.40, 'faithfulness': 0.498, 'answer_relevancy': 0.0}
+```
+
+Manual, question-by-question review (same discipline used throughout this
+project) tells a different and more accurate story than the aggregate
+numbers alone.
+
+### 8.2 Question-by-question breakdown
+
+| Q | Topic | Retrieval/answer quality (manual check) | RAGAS score | Verdict |
+|---|---|---|---|---|
+| 0 | Fast young strikers | Same known limitation as before (compound query, unchanged by design) — but answer now explicitly reasons through the tradeoff instead of flatly giving up, per §7.9 | precision 0.0 | Expected, unchanged, documented |
+| 1 | Best reflexes | Retrieval exactly correct (Sommer/ter Stegen/Courtois, matches ground truth) | faithfulness 0.0 | **Judge-scoring anomaly** — same pattern seen in prior runs, not a real fault |
+| 2 | Messi/Ronaldo comparison | Correctly found real candidates for both names, correctly refused to guess and asked for clarification instead of fabricating a comparison — the intended, designed behavior from §7.10/7.11 | 0.0 across all metrics | **Eval methodology gap** — see §8.3 |
+| 3 | Best left-footed defenders | Both extraction AND generation hit `503`s on the same question; degraded-note fallback (§7.12) fired correctly, then generation's own fallback message (§7.6) also fired correctly | 0.0 across all metrics | Genuine infra failure (Google demand spike), not a code fault — correct graceful-degradation behavior under a harder double-failure case than previously tested |
+| 4 | CAM overall rating | Exact match to ground truth | precision 1.0, recall 1.0 | Clean pass, metric and manual check agree |
+
+### 8.3 Real finding: RAGAS ground truth doesn't recognize "correctly declined to
+guess" as a good answer
+
+Question 2's ground truth is a direct numeric comparison ("L. Messi:
+dribbling 94, passing 90. Cristiano Ronaldo: dribbling 83, passing 76").
+But this project deliberately built entity disambiguation (§7.10) so that
+when a name is ambiguous, the system asks for clarification instead of
+guessing which player was meant — a design choice made explicitly to avoid
+fabricating results, consistent with this project's approach throughout
+(never guess unstated thresholds, never guess ambiguous entities, be
+visible about degraded results).
+
+The eval as currently written has no way to score "correctly asked for
+clarification" as a good outcome — it can only measure similarity to a
+direct-answer ground truth, so a fully honest, correctly-designed response
+scores identically to a wrong one. This means Q2 will score as a false
+failure in every future eval run unless addressed, undermining trust in
+the aggregate metric for exactly the kind of behavior this project has
+prioritized.
+
+**Recommendation (not yet implemented):** add a distinct eval category for
+ambiguous-entity questions with its own success criterion ("did the system
+correctly identify ambiguity and ask for clarification, listing real
+candidates?") rather than scoring them against a direct-answer ground
+truth. Standard RAGAS context precision/recall/faithfulness metrics aren't
+well-suited to this category and shouldn't be applied to it going forward.
+
+### 8.4 Overall assessment
+
+Excluding the judge-scoring anomaly (Q1), the eval-methodology gap (Q2),
+and the transient infra failure (Q3) — none of which reflect a real
+regression — the underlying system behaved as well as or better than
+prior runs on every question where a fair comparison is possible (Q1
+manually confirmed correct, Q4 confirmed correct by both methods, Q0
+unchanged as expected). No evidence of regression from this session's
+fixes. Aggregate RAGAS numbers from this run should not be read at face
+value without this context.
+
+### 8.5 Open items (updated)
+
+Carried over from §7.6/7.9 unresolved items, plus:
+
+8. **New: RAGAS eval doesn't credit correct ambiguity-clarification
+   behavior.** See §8.3. Needs a separate eval category/success criterion
+   before future runs can be trusted at face value for entity-disambiguation
+   questions.

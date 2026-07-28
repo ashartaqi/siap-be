@@ -1,7 +1,7 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, asc
-from app.models import Player, PlayerStats, GoalkeeperStats, PlayerPos
+from app.models import Player, PlayerStats, GoalkeeperStats, PlayerPos, Club
 
 VALID_POSITIONS = {"CB", "LB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "CF", "ST", "GK"}
 
@@ -21,7 +21,7 @@ def _age_bounds_to_dob_range(age_min: int | None, age_max: int | None):
 
 
 def _apply_shared_filters(query, constraints: dict) -> tuple:
-    """Applies filters common to both the ID-list path and the ranking path.
+    """Applies filters common to the ID-list, ranking, and aggregation paths.
     Returns (query, filters_applied: bool)."""
     filters_applied = False
 
@@ -42,6 +42,11 @@ def _apply_shared_filters(query, constraints: dict) -> tuple:
 
     if constraints.get("nationality"):
         query = query.filter(Player.nationality_name.ilike(f"%{constraints['nationality']}%"))
+        filters_applied = True
+
+    if constraints.get("club"):
+        query = query.join(Club, Club.id == Player.club_team_id)
+        query = query.filter(Club.name.ilike(f"%{constraints['club']}%"))
         filters_applied = True
 
     if constraints.get("overall_min") is not None:
@@ -66,8 +71,6 @@ def build_filtered_player_ids(db: Session, constraints: dict) -> list[int] | Non
     """
     Returns matching player IDs, or None if no usable structured constraints
     were found — signals the caller to fall back to pure vector search.
-    Skips ranking-only constraints (sort_by with nothing else) — that's
-    handled separately by build_ranked_player_ids.
     """
     if not constraints:
         return None
@@ -130,6 +133,32 @@ def build_ranked_player_ids(db: Session, constraints: dict, top_k: int = 5) -> l
             query = query.join(PlayerStats, PlayerStats.player_id == Player.id)
             query = query.order_by(direction(getattr(PlayerStats, sort_by)))
     else:
-        return None  # shouldn't happen, extractor already validates this
+        return None
 
     return [row.id for row in query.limit(top_k).all()]
+
+
+def find_player_name_matches(db: Session, name: str) -> list[Player]:
+    """Finds players matching the given name. Tries short_name first
+    (handles single distinctive names like "Messi", "Ronaldo", "Mbappé").
+    Falls back to long_name for fuller names like "Kylian Mbappé" that
+    won't appear in a "K. Mbappé"-style short_name."""
+    pattern = f"%{name}%"
+
+    matches = (
+        db.query(Player)
+        .filter(Player.short_name.ilike(pattern))
+        .order_by(Player.overall.desc())
+        .limit(10)
+        .all()
+    )
+    if matches:
+        return matches
+
+    return (
+        db.query(Player)
+        .filter(Player.long_name.ilike(pattern))
+        .order_by(Player.overall.desc())
+        .limit(10)
+        .all()
+    )
