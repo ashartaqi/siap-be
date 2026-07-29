@@ -725,3 +725,56 @@ warning, made exactly 2 calls, and returned the correct result --
 `constraint_extractor.py` returning the expected extraction for "How many
 left-footed strikers are there?", `generation.py` returning a real
 (context-appropriate) answer.
+
+## 12. Extraction-Skip Heuristic (Quota Optimization)
+
+### 12.1 Problem
+Every question cost a minimum of 2 Gemini calls (extraction + generation),
+even genuinely open-ended questions with nothing to extract ("tell me
+about football tactics"). Given the free-tier daily cap (~20 calls) that
+has repeatedly constrained this project's iteration speed, cutting
+unnecessary extraction calls has real, direct value.
+
+### 12.2 Design
+A cheap, local, zero-LLM-cost heuristic (`extraction_heuristic.py`)
+checks a question against a whitelist of trigger signals (digits,
+position codes/prose, foot mentions, sort/superlative words, aggregation
+phrases, comparison words, known club names, and a proper-noun detector
+for player/nationality names) before deciding whether to call
+`extract_constraints()` at all. Deliberately conservative: any signal
+present triggers extraction as normal; only genuinely signal-free
+questions skip it. Explicit design principle: a false "needs extraction"
+just costs quota; a false "skip extraction" silently degrades answer
+quality (e.g. missing a real player name would break entity
+disambiguation entirely) -- so the heuristic is tuned to over-trigger
+rather than under-trigger.
+
+### 12.3 Bugs found and fixed during free verification
+Two rounds of a 13-25 question test battery (covering every question
+previously verified across this project, plus new edge cases) caught two
+real false-negative bugs before any live wiring:
+1. Position names in prose ("strikers", "midfielders") weren't matched --
+   only position abbreviations (ST, CM) were checked. Fixed by adding a
+   `POSITION_PROSE_WORDS` set.
+2. Common qualifier words ("young", "fast", "high") weren't in the sort-
+   word trigger list, only their strict superlative forms ("fastest",
+   "highest"). Fixed by broadening `SORT_WORDS`.
+3. Single-word proper nouns ("Ronaldo", "Brazil", "French") weren't
+   caught -- the original proper-noun detector required 2 *consecutive*
+   capitalized words. Fixed by lowering the threshold to any single
+   capitalized word not in an expanded common-words list.
+
+Final test battery: 24/25 cases correct. The one remaining mismatch
+("What makes a good striker?") is a false positive (unnecessary
+extraction call), not a false negative -- consistent with the
+conservative design goal, left as-is rather than risk narrowing the
+trigger set further.
+
+### 12.4 Verification
+Wired into `service.py`, verified both directions with real evidence:
+- Skip path: called with a deliberately broken `extract_constraints`
+  (raises if called) on the question "football" -- no crash, confirming
+  extraction was genuinely skipped, not just intended to be.
+- Normal path: "How many left-footed strikers are there?" still returns
+  784, matching ground truth exactly -- confirming the heuristic doesn't
+  break the majority case where extraction is genuinely needed.
