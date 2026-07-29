@@ -4,11 +4,27 @@ from app.rag.retrieval import retrieve_relevant_players
 from app.rag.player_filters import find_player_name_matches
 from app.rag.player_aggregations import run_aggregation, format_aggregation_context
 from app.rag.generation import generate_answer
+from app.rag.extraction_heuristic import needs_constraint_extraction, _get_known_club_names
 from app.models import DocumentEmbedding
+
+_known_club_names_cache: set[str] | None = None
+
+
+def _get_cached_club_names(db: Session) -> set[str]:
+    global _known_club_names_cache
+    if _known_club_names_cache is None:
+        _known_club_names_cache = _get_known_club_names(db)
+    return _known_club_names_cache
 
 
 def ask_siap(db: Session, question: str) -> dict:
-    constraints = extract_constraints(question)
+    club_names = _get_cached_club_names(db)
+
+    if needs_constraint_extraction(question, known_club_names=club_names):
+        constraints = extract_constraints(question)
+    else:
+        constraints = {}
+
     extraction_failed = constraints.pop("_extraction_failed", False)
     unquantified = constraints.get("unquantified_qualifiers")
 
@@ -67,11 +83,10 @@ def ask_siap(db: Session, question: str) -> dict:
         answer = generate_answer(question, contexts, unquantified)
         return {"answer": answer, "sources": contexts, "degraded": extraction_failed}
 
-    results = retrieve_relevant_players(db, question, constraints, top_k=5)
-    contexts = [r.content for r in results]
+    contexts = retrieve_relevant_players(db, question, constraints, top_k=5)
+    contexts = [r.content for r in contexts]
     if degraded_note:
         contexts = [degraded_note] + contexts
 
     answer = generate_answer(question, contexts, unquantified)
-
     return {"answer": answer, "sources": contexts, "degraded": extraction_failed}
