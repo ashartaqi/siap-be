@@ -145,7 +145,26 @@ def build_ranked_player_ids(db: Session, constraints: dict, top_k: int = 5) -> l
     else:
         return None
 
-    return [row.id for row in query.limit(top_k).all()]
+    # A multi-position filter can cause the PlayerPos join to return the
+    # same player multiple times (once per matching position). Postgres's
+    # SELECT DISTINCT requires ORDER BY columns to be in the SELECT list,
+    # which conflicts with sorting by a joined stat column -- so dedupe
+    # in Python instead, over-fetching to compensate for potential
+    # duplicates before trimming to top_k.
+    overfetch_limit = top_k * 3  # generous margin; a player has at most a
+                                  # few positions, so 3x is safely enough
+    raw_ids = [row.id for row in query.limit(overfetch_limit).all()]
+
+    deduped_ids = []
+    seen = set()
+    for pid in raw_ids:
+        if pid not in seen:
+            seen.add(pid)
+            deduped_ids.append(pid)
+        if len(deduped_ids) == top_k:
+            break
+
+    return deduped_ids
 
 
 def find_player_name_matches(db: Session, name: str) -> list[Player]:

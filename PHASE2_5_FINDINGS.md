@@ -836,3 +836,43 @@ was previously verified. A holistic, varied quality pass before
 frontend/portfolio work caught a real, two-layer bug that targeted
 testing had missed entirely. Worth repeating this kind of broad sanity
 check periodically, not just relying on the fixed eval question set.
+
+## 14. Multi-Position Ranking Fan-Out Bug
+
+### 14.1 Discovery
+Found during the same holistic quality pass as §13 -- "Who are the
+fastest wingers in the game?" returned only 4 distinct players for a
+top_k=5 request, and the generated answer honestly (but awkwardly)
+noted "the provided dataset only includes these four players."
+
+### 14.2 Root cause
+`build_ranked_player_ids()` had no protection against the same
+`PlayerPos` join fan-out already identified and fixed in the aggregation
+count path (§7.6 item 6, .distinct() fix) -- but that earlier fix was
+never applied to the ranking/sort-by path, because it had only ever been
+tested with single-position filters (['GK'], ['ST']) before. Confirmed
+directly: player ID 953 holds three positions (LW, RW, ST), so filtering
+for ['LW', 'RW'] matched them twice, occupying 2 of 5 ranked slots and
+silently reducing the result to 4 unique players.
+
+### 14.3 Fix attempt 1 (failed) and fix attempt 2 (worked)
+First attempt: add `.distinct()` before `.limit()`. This failed with a
+Postgres error -- `SELECT DISTINCT` requires all `ORDER BY` columns to
+appear in the `SELECT` list, which conflicts with sorting by a joined
+stat column (e.g. `player_stats.pace`) while only selecting `players.id`.
+
+Working fix: deduplicate in Python instead of SQL. Over-fetch (3x top_k)
+from the already-correctly-sorted query, then filter duplicates while
+preserving order, stopping once top_k unique IDs are collected.
+
+### 14.4 Verification
+Confirmed: 5 distinct player IDs returned for the same LW/RW pace-sort
+query that previously returned only 4 unique players (with one
+duplicate).
+
+### 14.5 Takeaway
+Second bug in this session caught only via a holistic, varied quality
+pass rather than the standard eval set -- neither the original sort-by
+verification (§6.3, single positions only) nor this bug's sibling fix in
+aggregation (§7.6) tested the specific combination of multi-position
+filtering + sort-by ranking together.
