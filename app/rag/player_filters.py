@@ -24,6 +24,7 @@ def _apply_shared_filters(query, constraints: dict) -> tuple:
     """Applies filters common to the ID-list, ranking, and aggregation paths.
     Returns (query, filters_applied: bool)."""
     filters_applied = False
+    club_joined = False
 
     age_min = constraints.get("age_min")
     age_max = constraints.get("age_max")
@@ -45,8 +46,17 @@ def _apply_shared_filters(query, constraints: dict) -> tuple:
         filters_applied = True
 
     if constraints.get("club"):
-        query = query.join(Club, Club.id == Player.club_team_id)
+        if not club_joined:
+            query = query.join(Club, Club.id == Player.club_team_id)
+            club_joined = True
         query = query.filter(Club.name.ilike(f"%{constraints['club']}%"))
+        filters_applied = True
+
+    if constraints.get("league"):
+        if not club_joined:
+            query = query.join(Club, Club.id == Player.club_team_id)
+            club_joined = True
+        query = query.filter(Club.league_name == constraints["league"])
         filters_applied = True
 
     if constraints.get("overall_min") is not None:
