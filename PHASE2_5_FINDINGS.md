@@ -778,3 +778,61 @@ Wired into `service.py`, verified both directions with real evidence:
 - Normal path: "How many left-footed strikers are there?" still returns
   784, matching ground truth exactly -- confirming the heuristic doesn't
   break the majority case where extraction is genuinely needed.
+
+## 13. League Filtering — Missing Feature + Substring-Match Bug
+
+### 13.1 Discovery
+Found during a holistic pre-frontend quality pass (5 varied real questions,
+not the standard eval set) rather than targeted testing -- "What is the
+average overall rating in the Premier League?" returned 64.03, the
+*global* average across all 31,265 players, silently ignoring the league
+entirely.
+
+### 13.2 Root cause, layer 1: no league filter field existed
+Same structural gap as the earlier club-filter fix (§7.8) -- there was no
+way to say "filter to exactly one league" in the extraction schema, only
+`aggregation.group_by = "league_name"` (a full breakdown across ALL
+leagues). Confirmed via direct extraction calls that the model
+inconsistently either dropped the league reference entirely or
+hallucinated a nonexistent `"league"` field, since neither real option
+matched the actual intent.
+
+### 13.3 Fix, layer 1
+Added a `league` field to the extraction schema (parallel to `club`), with
+explicit prompt guidance distinguishing it from `group_by` ("league" =
+one specific league's number; `group_by` = comparison across leagues,
+never both together). Added a defensive check dropping `group_by` if both
+are somehow set. Added league filtering to `_apply_shared_filters()` in
+`player_filters.py`, automatically covering retrieval, sort-by, and
+aggregation paths (same one-fix-covers-three-paths benefit as club
+filtering).
+
+### 13.4 Root cause, layer 2: substring match caused league contamination
+First verification attempt returned 68.88, not the expected 70.11 -- still
+wrong, just differently wrong. Root cause: `ilike(f"%{league}%")` matched
+4 distinct leagues containing "Premier League" as a substring (Premier
+League, Ukrainian Premier League, Russian Premier League, South African
+Premier League), silently averaging across all of them instead of just
+the English Premier League.
+
+### 13.5 Fix, layer 2
+Switched league matching from fuzzy substring (`ilike`) to exact match
+(`==`). Verified safe for this case by confirming the extractor returns
+the league name in a form matching the database exactly ("Premier
+League", not "EPL" or similar). Club filtering was left as fuzzy match
+for now -- lower collision risk observed so far, but worth revisiting if
+a similar contamination bug is ever found there.
+
+### 13.6 Verification
+Final result: 70.1103030303030303, exact match to ground truth, confirmed
+at three levels -- direct `run_aggregation()` call, real extraction call,
+and full `ask_siap()` pipeline, all agreeing.
+
+### 13.7 Takeaway
+This bug was invisible to every previous unit/regression test in this
+project because none of them tested "aggregate a stat within one
+specific league" -- only "aggregate grouped across ALL leagues" (§7.4)
+was previously verified. A holistic, varied quality pass before
+frontend/portfolio work caught a real, two-layer bug that targeted
+testing had missed entirely. Worth repeating this kind of broad sanity
+check periodically, not just relying on the fixed eval question set.
