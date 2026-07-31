@@ -876,3 +876,67 @@ pass rather than the standard eval set -- neither the original sort-by
 verification (§6.3, single positions only) nor this bug's sibling fix in
 aggregation (§7.6) tested the specific combination of multi-position
 filtering + sort-by ranking together.
+
+## 15. Accent-Insensitive & Typo-Tolerant Name Matching
+
+### 15.1 Problem
+`find_player_name_matches()` used exact/substring `ilike()` matching only.
+Two real gaps: (1) accented names failed to match their unaccented
+spelling (e.g. "Mbappe" would not find "Mbappé"), and (2) minor
+misspellings failed entirely (e.g. "Mesi" would not find "Messi"),
+returning a "not found" answer for names a real user would very plausibly
+type.
+
+### 15.2 Design evolution (three iterations, each caught a real regression)
+
+**Iteration 1**: added accent-stripping (Python `unicodedata`, stdlib) to
+the existing substring match, plus a `difflib`-based fuzzy fallback
+(stdlib) for when substring matching found nothing.
+*Result*: fixed accents correctly, but fuzzy fallback never triggered for
+short names like "Mesi"/"Renaldo" -- substring matching found spurious
+matches first (e.g. "Mesi" matched inside "Damesio"), stopping the
+pipeline from ever reaching the better fuzzy layer.
+
+**Iteration 2**: reordered to fuzzy-first, substring-fallback. Also
+stripped "X. " initial-prefixes (e.g. "L. Messi" -> "Messi") before
+fuzzy comparison, since comparing a short query against a longer
+prefixed string was artificially lowering the similarity ratio below
+the 0.7 cutoff.
+*Result*: fixed "Mesi" -> Messi and most typos, but introduced a new
+regression -- the exact, correctly-spelled query "Ronaldo" stopped
+finding Cristiano Ronaldo entirely. Root cause: his `short_name` is
+literally "Cristiano Ronaldo" (no initial-prefix format), so prefix-
+stripping didn't apply, and the length mismatch against a 7-letter
+query dragged his similarity below threshold -- an obscure player
+literally named "Ronaldo" then dominated the fuzzy results instead.
+
+**Iteration 3 (final)**: whole-word substring match FIRST (word-boundary
+regex, not raw substring), fuzzy match as fallback only if no whole-word
+match exists at all. This fixes both problems simultaneously: "Ronaldo"
+as a whole word correctly matches within "Cristiano Ronaldo" (word
+boundaries respected), while "Mesi" is not a whole word within "Damesio"
+so it correctly falls through to fuzzy matching, which finds "Messi".
+
+### 15.3 Verification
+Brutal test battery, 17 real-world cases (accents, common misspellings,
+spacing variants) covering major players (Mbappé, Messi, Ronaldo,
+Neymar, Haaland, Salah, Modrić, Kane, De Bruyne) plus their common typo
+forms: 15/17 fully correct.
+
+One known, accepted non-fix: "Renaldo" (typo) returns "Renaldo Justinho"
+(a real player whose actual first name is "Renaldo") rather than
+Cristiano Ronaldo. This is a genuine name collision, not a matching
+defect -- an exact whole-word match to a real player's real name
+correctly takes priority over guessing the query is a typo for someone
+else. No further action planned; flagged as a known, deliberate
+limitation.
+
+### 15.4 Implementation notes
+- No new dependencies: accent-stripping uses stdlib `unicodedata`, fuzzy
+  matching uses stdlib `difflib`.
+- Performance tradeoff: whole-word matching requires fetching all
+  players with a non-null `short_name` into Python (rather than a pure
+  SQL `ilike`), since accent-stripping happens client-side. Measured at
+  ~0.6-1.2s per lookup against 31k+ players -- acceptable at this scale
+  and traffic level, but would need a DB-side solution (e.g. Postgres
+  `unaccent` extension) if this needs to scale significantly further.
