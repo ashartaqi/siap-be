@@ -40,7 +40,7 @@ COMMON_CAPITALIZED_WORDS = {
 }
 
 
-def _get_known_club_names(db) -> set[str]:
+def get_known_club_names(db) -> set[str]:
     """Fetches club names once; caller is responsible for caching across
     calls if this is used in a hot path (see needs_constraint_extraction's
     club_names parameter)."""
