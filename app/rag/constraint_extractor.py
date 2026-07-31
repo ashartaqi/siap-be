@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import logging
 from google import genai
 from dotenv import load_dotenv
@@ -15,6 +16,16 @@ VALID_SORT_FIELDS = {
     "diving", "handling", "kicking", "positioning", "reflexes", "speed",
 }
 
+RETRYABLE_ERROR_MARKERS = ("503", "UNAVAILABLE", "overloaded")
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 3
+
+
+def _is_retryable(error: Exception) -> bool:
+    msg = str(error)
+    return any(marker in msg for marker in RETRYABLE_ERROR_MARKERS)
+
+
 EXTRACTION_PROMPT = """You are a constraint extraction engine for a football player database.
 Extract ONLY the structured filters explicitly stated in the question below.
 Do not guess or infer thresholds that aren't stated. Omit keys entirely if not mentioned (never use null).
@@ -24,6 +35,14 @@ CB, LB, RB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST, GK
 
 If the question names a specific club (e.g. "Real Madrid", "Man City", "Barcelona"), set "club" to
 that name exactly as stated in the question. Do not guess a club if none is named.
+
+If the question names a specific league (e.g. "Premier League", "La Liga", "Serie A", "Bundesliga"),
+set "league" to that name exactly as stated. Do not guess a league if none is named. Use "league"
+to filter results down to ONE specific league. This is different from aggregation.group_by =
+"league_name", which is only for questions that want a breakdown ACROSS all leagues (e.g.
+"compare leagues", "which league has the highest..."). Never use both "league" and
+aggregation.group_by = "league_name" together in the same response — a question either wants
+one specific league's number, or a comparison across all leagues, not both.
 
 NAMED PLAYERS: if the question refers to one or more specific players by name
 (e.g. "Messi", "Ronaldo", "Mbappé"), list them in "player_names" exactly as
@@ -55,7 +74,8 @@ set "aggregation" to an object with:
            omit "field" entirely if type is "count" and no specific stat is involved
   "group_by": one of "league_name", "nationality_name", "club_name", "position",
               "preferred_foot" — omit if the question wants a single overall number,
-              not broken down by group
+              not broken down by group. Do NOT set this if "league" is already set above --
+              use "league" instead when the question names one specific league.
 Only set "aggregation" when the question clearly wants a computed number/summary,
 NOT a list of specific players. If it wants specific players (even ranked), use
 sort_by instead, not aggregation. Do not set both in the same response.
@@ -76,6 +96,7 @@ Return ONLY valid JSON, no markdown fences, no explanation, matching this shape:
   "preferred_foot": "Left" or "Right",
   "nationality": string,
   "club": string,
+  "league": string,
   "player_names": ["Messi", "Ronaldo"],
   "overall_min": integer,
   "overall_max": integer,
@@ -95,23 +116,37 @@ Question: {question}
 
 def extract_constraints(question: str) -> dict:
     prompt = EXTRACTION_PROMPT.format(question=question)
-    try:
-        response = _client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=prompt,
-        )
-        raw = response.text.strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
-        result = json.loads(raw)
 
-        if result.get("sort_by") and result["sort_by"] not in VALID_SORT_FIELDS:
-            logger.warning(f"Extractor returned invalid sort_by: {result['sort_by']!r}, dropping")
-            result.pop("sort_by", None)
-            result.pop("sort_direction", None)
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = _client.models.generate_content(
+                model="gemini-flash-latest",
+                contents=prompt,
+            )
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                raw = raw.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
+            result = json.loads(raw)
 
-        result["_extraction_failed"] = False
-        return result
-    except Exception as e:
-        logger.warning(f"Constraint extraction failed, falling back to vector search: {e}")
-        return {"_extraction_failed": True}
+            if result.get("sort_by") and result["sort_by"] not in VALID_SORT_FIELDS:
+                logger.warning(f"Extractor returned invalid sort_by: {result['sort_by']!r}, dropping")
+                result.pop("sort_by", None)
+                result.pop("sort_direction", None)
+
+            # Defensive: never allow both "league" and aggregation.group_by="league_name"
+            # at once -- if the model ignores the prompt instruction, prefer the
+            # single-league filter (more specific intent) over the group-by.
+            if result.get("league") and result.get("aggregation", {}).get("group_by") == "league_name":
+                logger.warning("Extractor returned both league filter and league group_by, dropping group_by")
+                result["aggregation"].pop("group_by", None)
+
+            return result
+        except Exception as e:
+            last_error = e
+            if _is_retryable(e) and attempt < MAX_RETRIES:
+                logger.warning(f"Extraction attempt {attempt} failed with retryable error, retrying: {e}")
+                time.sleep(RETRY_DELAY_SECONDS)
+                continue
+            logger.warning(f"Constraint extraction failed, falling back to vector search: {e}")
+            return {"_extraction_failed": True}
