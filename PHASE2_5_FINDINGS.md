@@ -554,3 +554,389 @@ Carried over from §7.6/7.9 unresolved items, plus:
    behavior.** See §8.3. Needs a separate eval category/success criterion
    before future runs can be trusted at face value for entity-disambiguation
    questions.
+
+## 9. TruLens Integration — Attempted, API Discovered, Shelved
+
+### 9.1 Goal
+
+Integrate TruLens (RAG triad: context relevance, groundedness, answer
+relevance) on top of the existing RAGAS harness, for per-pipeline-stage
+tracing and a second, independently-corroborating judge model. Not meant
+to replace RAGAS -- meant to add stage-level diagnosis ("which stage
+broke") on top of RAGAS's aggregate scores.
+
+### 9.2 What was built
+
+- `app/rag/tracing.py` -- three `Metric` objects (context relevance,
+  groundedness, answer relevance) wired to a Groq/Llama-3.3-70b provider
+  via `trulens-providers-litellm`, matching the existing RAGAS judge model
+  so scores are comparable.
+- `app/rag/instrumented_service.py` -- wraps (does not modify) every stage
+  of `service.py`'s `ask_siap()` as its own traced span: constraint
+  extraction, entity disambiguation, aggregation, retrieval, generation.
+- `app/rag/eval_trulens_runner.py` -- scaffolding to run the same 5-question
+  eval set used by the RAGAS harness through the TruLens-instrumented
+  pipeline.
+
+### 9.3 API discovery process (the actual hard part)
+
+`trulens-core` (installed: 2.8.1) has undergone significant API churn --
+the currently-installed version differs substantially from most publicly
+documented examples, including the deprecated `trulens-eval` package and
+even some patterns suggested by the package's own deprecation warnings.
+Getting a working `Metric` construction required roughly a dozen corrected
+guesses, each narrowed by directly inspecting the installed package via
+`inspect.signature()`, `dir()`, and deliberately triggering errors rather
+than trusting documentation or plausible-looking API guesses. Confirmed,
+working facts about `trulens-core==2.8.1`, `trulens-providers-litellm==2.8.1`,
+`trulens-dashboard==2.9.0`:
+
+- `Feedback` is deprecated in favor of `Metric` (`from trulens.core import
+  Metric`). `Feedback(...).on(Selector(...))` style chaining raises
+  `ValueError: OTEL mode only supports a single positional argument to
+  \`on\`` and is not the current pattern.
+- The correct pattern is `Metric(implementation=provider.some_method)`
+  followed by convenience methods: `.on_input()`, `.on_output()`,
+  `.on_input_output()`, `.on_context(collect_list=bool)`. These chain
+  together (e.g. `.on_input().on_context(collect_list=False)`) and bind
+  to the provider function's parameters *positionally*, not by matching
+  names -- e.g. `groundedness_measure_with_cot_reasons(source, statement)`
+  binds correctly via `.on_context().on_output()` despite the parameter
+  names not being "context"/"output".
+- `instrument` must be imported from `trulens.core.otel.instrument`
+  (a class, constructed per-use with `span_type`/`name`/`attributes`
+  kwargs) -- not from `trulens.apps.app` or `trulens.apps.custom`, which
+  export a different, pre-instantiated default instance that only accepts
+  a bare function with no config.
+- `SpanAttributes.SpanType` is a fixed enum (`unknown`, `record_root`,
+  `retrieval`, `generation`, `aggregation` is NOT in this enum -- custom
+  pipeline stages should use `SpanType.UNKNOWN` with a descriptive `name=`
+  instead of inventing new span types).
+- `SpanAttributes.GENERATION` has no `INPUT`/`OUTPUT` sub-attributes --
+  those live under `SpanAttributes.RECORD_ROOT.INPUT`/`.OUTPUT` instead,
+  which represents the whole record's input/output, not a per-span
+  attribute.
+- Feedback computation runs **asynchronously** in a background evaluator
+  thread. Reading results immediately after the `with tru_app as
+  recording:` block races that computation -- some scores will genuinely
+  be `NaN` because they haven't been computed yet, and exiting before
+  they finish raises `RuntimeError: cannot schedule new futures after
+  interpreter shutdown` in the background thread. Fix:
+  `session.wait_for_feedback_results(record_ids, feedback_names,
+  timeout=...)` before reading/printing results.
+
+### 9.4 Real, working result achieved
+
+With all of the above corrected, the pipeline traced successfully end to
+end for at least one question ("Which goalkeepers have the best
+reflexes?"): the correct answer was produced (matching the same verified
+ground truth used throughout this project), and genuine, non-NaN feedback
+scores were computed and attached to records (`relevance_with_cot_reasons`
+showing real `0.0`/`1.0` values, not universal failures).
+
+### 9.5 Remaining problem -- why this is being shelved for now
+
+TruLens's automatic span-content inference does not reliably know how to
+extract a meaningful "input"/"output" from spans that aren't
+naturally answer-shaped -- specifically `_traced_aggregation`, which
+returns `None` (no aggregation needed) or a raw dict, not natural-language
+text. Observed concretely: the `answer_relevance` metric was applied to
+the aggregation span's constraints argument for a non-aggregation
+question, producing a technically-well-formed but meaningless score (the
+judge correctly scored `['GK']` as irrelevant to "which goalkeepers have
+the best reflexes?", but `['GK']` was never meant to be scored as an
+answer in the first place -- it's an internal argument fragment).
+
+Fixing this properly requires deliberately scoping each `Metric` to only
+the spans it's actually meant to evaluate (e.g. answer relevance should
+only ever look at the `generation` span's record-level output, never at
+intermediate stages like aggregation or disambiguation) -- a real design
+task, not a quick patch, and one that risks further extended API-discovery
+sessions given how much guessing was required to get this far.
+
+### 9.6 Decision
+
+Shelved for now. The existing RAGAS harness plus manual ground-truth
+verification (the primary method used to verify every fix across
+Phase 2.5) remain the trusted evaluation tools for actual decisions about
+Ask SIAP's retrieval/answer quality. TruLens integration is a legitimate
+future enhancement (real per-stage tracing has genuine value once
+metric-to-span scoping is done correctly) but is evaluation *tooling*,
+not a fix to the chatbot itself -- lower priority than closing remaining
+answer-quality gaps or reliability/deployment work.
+
+All code (`tracing.py`, `instrumented_service.py`, `eval_trulens_runner.py`,
+`test_trulens_single.py`) is left in place, functional as documented above,
+for whoever picks this back up.
+
+## 10. Rate Limiting on /ask
+
+### 10.1 Problem
+The `/ask` endpoint had no dedicated rate limit, despite each call costing
+2 Gemini requests against a ~20/day free-tier quota (plus a CPU-bound
+embedding step). The app's existing `slowapi`-based rate limiter
+(`app/core/rate_limit.py`, Redis-backed, already wired into `main.py`)
+only applied its `DEFAULT_LIMIT` (90/minute) globally -- generous enough
+for typical CRUD endpoints, but high enough to let a single user or bug
+exhaust the entire daily Gemini quota in under a minute.
+
+### 10.2 Fix
+Added `ASK_LIMIT = "5/minute"` to `rate_limit.py`, applied via
+`@limiter.limit(ASK_LIMIT)` on the `/ask` route specifically. Required
+adding a `Request` parameter to the route function (a `slowapi`
+requirement) and renaming the body parameter to avoid a name collision.
+
+### 10.3 Verification
+Confirmed via direct `curl` loop against a running local server: 7
+consecutive calls to `/ask` returned `200, 200, 200, 200, 200, 429, 429` --
+exactly the expected 5-then-blocked pattern. After waiting for the
+per-minute window to reset, a follow-up call confirmed the underlying
+pipeline still works correctly post-rate-limiting (784 left-footed
+strikers, matching ground truth exactly) -- confirming the fix blocks
+excess requests without breaking correctness for allowed ones.
+
+Note: this verification itself consumed real quota (~10 Gemini calls
+across 5 successful test requests) -- factored into that session's
+quota budget.
+
+## 11. Retry-with-Backoff for Transient Failures
+
+### 11.1 Problem
+Both `constraint_extractor.py` and `generation.py` previously treated
+every exception identically -- a single failed call immediately
+triggered the fallback path (degraded flag, or "couldn't generate an
+answer"). Repeated sessions this project showed `503` "experiencing
+high demand" errors are usually transient and often succeed on an
+immediate retry.
+
+### 11.2 Fix
+Added a retry loop (max 3 attempts, 3s delay) to both files, gated by an
+`_is_retryable()` check that only retries on markers indicating a
+transient/server-side issue (`503`, `UNAVAILABLE`, `overloaded`) --
+explicitly does NOT retry on quota exhaustion (`429`) or bad-request
+errors (`404`), since retrying those wastes calls without any chance of
+success.
+
+### 11.3 Verification
+Verified on both files via controlled failure injection (monkey-patching
+the client to fail on the first call, succeed on the second, using the
+real API for the successful attempt): both correctly logged a retry
+warning, made exactly 2 calls, and returned the correct result --
+`constraint_extractor.py` returning the expected extraction for "How many
+left-footed strikers are there?", `generation.py` returning a real
+(context-appropriate) answer.
+
+## 12. Extraction-Skip Heuristic (Quota Optimization)
+
+### 12.1 Problem
+Every question cost a minimum of 2 Gemini calls (extraction + generation),
+even genuinely open-ended questions with nothing to extract ("tell me
+about football tactics"). Given the free-tier daily cap (~20 calls) that
+has repeatedly constrained this project's iteration speed, cutting
+unnecessary extraction calls has real, direct value.
+
+### 12.2 Design
+A cheap, local, zero-LLM-cost heuristic (`extraction_heuristic.py`)
+checks a question against a whitelist of trigger signals (digits,
+position codes/prose, foot mentions, sort/superlative words, aggregation
+phrases, comparison words, known club names, and a proper-noun detector
+for player/nationality names) before deciding whether to call
+`extract_constraints()` at all. Deliberately conservative: any signal
+present triggers extraction as normal; only genuinely signal-free
+questions skip it. Explicit design principle: a false "needs extraction"
+just costs quota; a false "skip extraction" silently degrades answer
+quality (e.g. missing a real player name would break entity
+disambiguation entirely) -- so the heuristic is tuned to over-trigger
+rather than under-trigger.
+
+### 12.3 Bugs found and fixed during free verification
+Two rounds of a 13-25 question test battery (covering every question
+previously verified across this project, plus new edge cases) caught two
+real false-negative bugs before any live wiring:
+1. Position names in prose ("strikers", "midfielders") weren't matched --
+   only position abbreviations (ST, CM) were checked. Fixed by adding a
+   `POSITION_PROSE_WORDS` set.
+2. Common qualifier words ("young", "fast", "high") weren't in the sort-
+   word trigger list, only their strict superlative forms ("fastest",
+   "highest"). Fixed by broadening `SORT_WORDS`.
+3. Single-word proper nouns ("Ronaldo", "Brazil", "French") weren't
+   caught -- the original proper-noun detector required 2 *consecutive*
+   capitalized words. Fixed by lowering the threshold to any single
+   capitalized word not in an expanded common-words list.
+
+Final test battery: 24/25 cases correct. The one remaining mismatch
+("What makes a good striker?") is a false positive (unnecessary
+extraction call), not a false negative -- consistent with the
+conservative design goal, left as-is rather than risk narrowing the
+trigger set further.
+
+### 12.4 Verification
+Wired into `service.py`, verified both directions with real evidence:
+- Skip path: called with a deliberately broken `extract_constraints`
+  (raises if called) on the question "football" -- no crash, confirming
+  extraction was genuinely skipped, not just intended to be.
+- Normal path: "How many left-footed strikers are there?" still returns
+  784, matching ground truth exactly -- confirming the heuristic doesn't
+  break the majority case where extraction is genuinely needed.
+
+## 13. League Filtering — Missing Feature + Substring-Match Bug
+
+### 13.1 Discovery
+Found during a holistic pre-frontend quality pass (5 varied real questions,
+not the standard eval set) rather than targeted testing -- "What is the
+average overall rating in the Premier League?" returned 64.03, the
+*global* average across all 31,265 players, silently ignoring the league
+entirely.
+
+### 13.2 Root cause, layer 1: no league filter field existed
+Same structural gap as the earlier club-filter fix (§7.8) -- there was no
+way to say "filter to exactly one league" in the extraction schema, only
+`aggregation.group_by = "league_name"` (a full breakdown across ALL
+leagues). Confirmed via direct extraction calls that the model
+inconsistently either dropped the league reference entirely or
+hallucinated a nonexistent `"league"` field, since neither real option
+matched the actual intent.
+
+### 13.3 Fix, layer 1
+Added a `league` field to the extraction schema (parallel to `club`), with
+explicit prompt guidance distinguishing it from `group_by` ("league" =
+one specific league's number; `group_by` = comparison across leagues,
+never both together). Added a defensive check dropping `group_by` if both
+are somehow set. Added league filtering to `_apply_shared_filters()` in
+`player_filters.py`, automatically covering retrieval, sort-by, and
+aggregation paths (same one-fix-covers-three-paths benefit as club
+filtering).
+
+### 13.4 Root cause, layer 2: substring match caused league contamination
+First verification attempt returned 68.88, not the expected 70.11 -- still
+wrong, just differently wrong. Root cause: `ilike(f"%{league}%")` matched
+4 distinct leagues containing "Premier League" as a substring (Premier
+League, Ukrainian Premier League, Russian Premier League, South African
+Premier League), silently averaging across all of them instead of just
+the English Premier League.
+
+### 13.5 Fix, layer 2
+Switched league matching from fuzzy substring (`ilike`) to exact match
+(`==`). Verified safe for this case by confirming the extractor returns
+the league name in a form matching the database exactly ("Premier
+League", not "EPL" or similar). Club filtering was left as fuzzy match
+for now -- lower collision risk observed so far, but worth revisiting if
+a similar contamination bug is ever found there.
+
+### 13.6 Verification
+Final result: 70.1103030303030303, exact match to ground truth, confirmed
+at three levels -- direct `run_aggregation()` call, real extraction call,
+and full `ask_siap()` pipeline, all agreeing.
+
+### 13.7 Takeaway
+This bug was invisible to every previous unit/regression test in this
+project because none of them tested "aggregate a stat within one
+specific league" -- only "aggregate grouped across ALL leagues" (§7.4)
+was previously verified. A holistic, varied quality pass before
+frontend/portfolio work caught a real, two-layer bug that targeted
+testing had missed entirely. Worth repeating this kind of broad sanity
+check periodically, not just relying on the fixed eval question set.
+
+## 14. Multi-Position Ranking Fan-Out Bug
+
+### 14.1 Discovery
+Found during the same holistic quality pass as §13 -- "Who are the
+fastest wingers in the game?" returned only 4 distinct players for a
+top_k=5 request, and the generated answer honestly (but awkwardly)
+noted "the provided dataset only includes these four players."
+
+### 14.2 Root cause
+`build_ranked_player_ids()` had no protection against the same
+`PlayerPos` join fan-out already identified and fixed in the aggregation
+count path (§7.6 item 6, .distinct() fix) -- but that earlier fix was
+never applied to the ranking/sort-by path, because it had only ever been
+tested with single-position filters (['GK'], ['ST']) before. Confirmed
+directly: player ID 953 holds three positions (LW, RW, ST), so filtering
+for ['LW', 'RW'] matched them twice, occupying 2 of 5 ranked slots and
+silently reducing the result to 4 unique players.
+
+### 14.3 Fix attempt 1 (failed) and fix attempt 2 (worked)
+First attempt: add `.distinct()` before `.limit()`. This failed with a
+Postgres error -- `SELECT DISTINCT` requires all `ORDER BY` columns to
+appear in the `SELECT` list, which conflicts with sorting by a joined
+stat column (e.g. `player_stats.pace`) while only selecting `players.id`.
+
+Working fix: deduplicate in Python instead of SQL. Over-fetch (3x top_k)
+from the already-correctly-sorted query, then filter duplicates while
+preserving order, stopping once top_k unique IDs are collected.
+
+### 14.4 Verification
+Confirmed: 5 distinct player IDs returned for the same LW/RW pace-sort
+query that previously returned only 4 unique players (with one
+duplicate).
+
+### 14.5 Takeaway
+Second bug in this session caught only via a holistic, varied quality
+pass rather than the standard eval set -- neither the original sort-by
+verification (§6.3, single positions only) nor this bug's sibling fix in
+aggregation (§7.6) tested the specific combination of multi-position
+filtering + sort-by ranking together.
+
+## 15. Accent-Insensitive & Typo-Tolerant Name Matching
+
+### 15.1 Problem
+`find_player_name_matches()` used exact/substring `ilike()` matching only.
+Two real gaps: (1) accented names failed to match their unaccented
+spelling (e.g. "Mbappe" would not find "Mbappé"), and (2) minor
+misspellings failed entirely (e.g. "Mesi" would not find "Messi"),
+returning a "not found" answer for names a real user would very plausibly
+type.
+
+### 15.2 Design evolution (three iterations, each caught a real regression)
+
+**Iteration 1**: added accent-stripping (Python `unicodedata`, stdlib) to
+the existing substring match, plus a `difflib`-based fuzzy fallback
+(stdlib) for when substring matching found nothing.
+*Result*: fixed accents correctly, but fuzzy fallback never triggered for
+short names like "Mesi"/"Renaldo" -- substring matching found spurious
+matches first (e.g. "Mesi" matched inside "Damesio"), stopping the
+pipeline from ever reaching the better fuzzy layer.
+
+**Iteration 2**: reordered to fuzzy-first, substring-fallback. Also
+stripped "X. " initial-prefixes (e.g. "L. Messi" -> "Messi") before
+fuzzy comparison, since comparing a short query against a longer
+prefixed string was artificially lowering the similarity ratio below
+the 0.7 cutoff.
+*Result*: fixed "Mesi" -> Messi and most typos, but introduced a new
+regression -- the exact, correctly-spelled query "Ronaldo" stopped
+finding Cristiano Ronaldo entirely. Root cause: his `short_name` is
+literally "Cristiano Ronaldo" (no initial-prefix format), so prefix-
+stripping didn't apply, and the length mismatch against a 7-letter
+query dragged his similarity below threshold -- an obscure player
+literally named "Ronaldo" then dominated the fuzzy results instead.
+
+**Iteration 3 (final)**: whole-word substring match FIRST (word-boundary
+regex, not raw substring), fuzzy match as fallback only if no whole-word
+match exists at all. This fixes both problems simultaneously: "Ronaldo"
+as a whole word correctly matches within "Cristiano Ronaldo" (word
+boundaries respected), while "Mesi" is not a whole word within "Damesio"
+so it correctly falls through to fuzzy matching, which finds "Messi".
+
+### 15.3 Verification
+Brutal test battery, 17 real-world cases (accents, common misspellings,
+spacing variants) covering major players (Mbappé, Messi, Ronaldo,
+Neymar, Haaland, Salah, Modrić, Kane, De Bruyne) plus their common typo
+forms: 15/17 fully correct.
+
+One known, accepted non-fix: "Renaldo" (typo) returns "Renaldo Justinho"
+(a real player whose actual first name is "Renaldo") rather than
+Cristiano Ronaldo. This is a genuine name collision, not a matching
+defect -- an exact whole-word match to a real player's real name
+correctly takes priority over guessing the query is a typo for someone
+else. No further action planned; flagged as a known, deliberate
+limitation.
+
+### 15.4 Implementation notes
+- No new dependencies: accent-stripping uses stdlib `unicodedata`, fuzzy
+  matching uses stdlib `difflib`.
+- Performance tradeoff: whole-word matching requires fetching all
+  players with a non-null `short_name` into Python (rather than a pure
+  SQL `ilike`), since accent-stripping happens client-side. Measured at
+  ~0.6-1.2s per lookup against 31k+ players -- acceptable at this scale
+  and traffic level, but would need a DB-side solution (e.g. Postgres
+  `unaccent` extension) if this needs to scale significantly further.
