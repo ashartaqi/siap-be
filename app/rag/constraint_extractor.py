@@ -36,6 +36,14 @@ CB, LB, RB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST, GK
 If the question names a specific club (e.g. "Real Madrid", "Man City", "Barcelona"), set "club" to
 that name exactly as stated in the question. Do not guess a club if none is named.
 
+If the question names a specific league (e.g. "Premier League", "La Liga", "Serie A", "Bundesliga"),
+set "league" to that name exactly as stated. Do not guess a league if none is named. Use "league"
+to filter results down to ONE specific league. This is different from aggregation.group_by =
+"league_name", which is only for questions that want a breakdown ACROSS all leagues (e.g.
+"compare leagues", "which league has the highest..."). Never use both "league" and
+aggregation.group_by = "league_name" together in the same response — a question either wants
+one specific league's number, or a comparison across all leagues, not both.
+
 NAMED PLAYERS: if the question refers to one or more specific players by name
 (e.g. "Messi", "Ronaldo", "Mbappé"), list them in "player_names" exactly as
 mentioned. Only include actual player names, not positions or clubs.
@@ -66,7 +74,8 @@ set "aggregation" to an object with:
            omit "field" entirely if type is "count" and no specific stat is involved
   "group_by": one of "league_name", "nationality_name", "club_name", "position",
               "preferred_foot" — omit if the question wants a single overall number,
-              not broken down by group
+              not broken down by group. Do NOT set this if "league" is already set above --
+              use "league" instead when the question names one specific league.
 Only set "aggregation" when the question clearly wants a computed number/summary,
 NOT a list of specific players. If it wants specific players (even ranked), use
 sort_by instead, not aggregation. Do not set both in the same response.
@@ -87,6 +96,7 @@ Return ONLY valid JSON, no markdown fences, no explanation, matching this shape:
   "preferred_foot": "Left" or "Right",
   "nationality": string,
   "club": string,
+  "league": string,
   "player_names": ["Messi", "Ronaldo"],
   "overall_min": integer,
   "overall_max": integer,
@@ -123,6 +133,13 @@ def extract_constraints(question: str) -> dict:
                 logger.warning(f"Extractor returned invalid sort_by: {result['sort_by']!r}, dropping")
                 result.pop("sort_by", None)
                 result.pop("sort_direction", None)
+
+            # Defensive: never allow both "league" and aggregation.group_by="league_name"
+            # at once -- if the model ignores the prompt instruction, prefer the
+            # single-league filter (more specific intent) over the group-by.
+            if result.get("league") and result.get("aggregation", {}).get("group_by") == "league_name":
+                logger.warning("Extractor returned both league filter and league group_by, dropping group_by")
+                result["aggregation"].pop("group_by", None)
 
             return result
         except Exception as e:

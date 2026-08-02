@@ -726,3 +726,219 @@ warning, made exactly 2 calls, and returned the correct result --
 `constraint_extractor.py` returning the expected extraction for "How many
 left-footed strikers are there?", `generation.py` returning a real
 (context-appropriate) answer.
+
+## 12. Extraction-Skip Heuristic (Quota Optimization)
+
+### 12.1 Problem
+Every question cost a minimum of 2 Gemini calls (extraction + generation),
+even genuinely open-ended questions with nothing to extract ("tell me
+about football tactics"). Given the free-tier daily cap (~20 calls) that
+has repeatedly constrained this project's iteration speed, cutting
+unnecessary extraction calls has real, direct value.
+
+### 12.2 Design
+A cheap, local, zero-LLM-cost heuristic (`extraction_heuristic.py`)
+checks a question against a whitelist of trigger signals (digits,
+position codes/prose, foot mentions, sort/superlative words, aggregation
+phrases, comparison words, known club names, and a proper-noun detector
+for player/nationality names) before deciding whether to call
+`extract_constraints()` at all. Deliberately conservative: any signal
+present triggers extraction as normal; only genuinely signal-free
+questions skip it. Explicit design principle: a false "needs extraction"
+just costs quota; a false "skip extraction" silently degrades answer
+quality (e.g. missing a real player name would break entity
+disambiguation entirely) -- so the heuristic is tuned to over-trigger
+rather than under-trigger.
+
+### 12.3 Bugs found and fixed during free verification
+Two rounds of a 13-25 question test battery (covering every question
+previously verified across this project, plus new edge cases) caught two
+real false-negative bugs before any live wiring:
+1. Position names in prose ("strikers", "midfielders") weren't matched --
+   only position abbreviations (ST, CM) were checked. Fixed by adding a
+   `POSITION_PROSE_WORDS` set.
+2. Common qualifier words ("young", "fast", "high") weren't in the sort-
+   word trigger list, only their strict superlative forms ("fastest",
+   "highest"). Fixed by broadening `SORT_WORDS`.
+3. Single-word proper nouns ("Ronaldo", "Brazil", "French") weren't
+   caught -- the original proper-noun detector required 2 *consecutive*
+   capitalized words. Fixed by lowering the threshold to any single
+   capitalized word not in an expanded common-words list.
+
+Final test battery: 24/25 cases correct. The one remaining mismatch
+("What makes a good striker?") is a false positive (unnecessary
+extraction call), not a false negative -- consistent with the
+conservative design goal, left as-is rather than risk narrowing the
+trigger set further.
+
+### 12.4 Verification
+Wired into `service.py`, verified both directions with real evidence:
+- Skip path: called with a deliberately broken `extract_constraints`
+  (raises if called) on the question "football" -- no crash, confirming
+  extraction was genuinely skipped, not just intended to be.
+- Normal path: "How many left-footed strikers are there?" still returns
+  784, matching ground truth exactly -- confirming the heuristic doesn't
+  break the majority case where extraction is genuinely needed.
+
+## 13. League Filtering — Missing Feature + Substring-Match Bug
+
+### 13.1 Discovery
+Found during a holistic pre-frontend quality pass (5 varied real questions,
+not the standard eval set) rather than targeted testing -- "What is the
+average overall rating in the Premier League?" returned 64.03, the
+*global* average across all 31,265 players, silently ignoring the league
+entirely.
+
+### 13.2 Root cause, layer 1: no league filter field existed
+Same structural gap as the earlier club-filter fix (§7.8) -- there was no
+way to say "filter to exactly one league" in the extraction schema, only
+`aggregation.group_by = "league_name"` (a full breakdown across ALL
+leagues). Confirmed via direct extraction calls that the model
+inconsistently either dropped the league reference entirely or
+hallucinated a nonexistent `"league"` field, since neither real option
+matched the actual intent.
+
+### 13.3 Fix, layer 1
+Added a `league` field to the extraction schema (parallel to `club`), with
+explicit prompt guidance distinguishing it from `group_by` ("league" =
+one specific league's number; `group_by` = comparison across leagues,
+never both together). Added a defensive check dropping `group_by` if both
+are somehow set. Added league filtering to `_apply_shared_filters()` in
+`player_filters.py`, automatically covering retrieval, sort-by, and
+aggregation paths (same one-fix-covers-three-paths benefit as club
+filtering).
+
+### 13.4 Root cause, layer 2: substring match caused league contamination
+First verification attempt returned 68.88, not the expected 70.11 -- still
+wrong, just differently wrong. Root cause: `ilike(f"%{league}%")` matched
+4 distinct leagues containing "Premier League" as a substring (Premier
+League, Ukrainian Premier League, Russian Premier League, South African
+Premier League), silently averaging across all of them instead of just
+the English Premier League.
+
+### 13.5 Fix, layer 2
+Switched league matching from fuzzy substring (`ilike`) to exact match
+(`==`). Verified safe for this case by confirming the extractor returns
+the league name in a form matching the database exactly ("Premier
+League", not "EPL" or similar). Club filtering was left as fuzzy match
+for now -- lower collision risk observed so far, but worth revisiting if
+a similar contamination bug is ever found there.
+
+### 13.6 Verification
+Final result: 70.1103030303030303, exact match to ground truth, confirmed
+at three levels -- direct `run_aggregation()` call, real extraction call,
+and full `ask_siap()` pipeline, all agreeing.
+
+### 13.7 Takeaway
+This bug was invisible to every previous unit/regression test in this
+project because none of them tested "aggregate a stat within one
+specific league" -- only "aggregate grouped across ALL leagues" (§7.4)
+was previously verified. A holistic, varied quality pass before
+frontend/portfolio work caught a real, two-layer bug that targeted
+testing had missed entirely. Worth repeating this kind of broad sanity
+check periodically, not just relying on the fixed eval question set.
+
+## 14. Multi-Position Ranking Fan-Out Bug
+
+### 14.1 Discovery
+Found during the same holistic quality pass as §13 -- "Who are the
+fastest wingers in the game?" returned only 4 distinct players for a
+top_k=5 request, and the generated answer honestly (but awkwardly)
+noted "the provided dataset only includes these four players."
+
+### 14.2 Root cause
+`build_ranked_player_ids()` had no protection against the same
+`PlayerPos` join fan-out already identified and fixed in the aggregation
+count path (§7.6 item 6, .distinct() fix) -- but that earlier fix was
+never applied to the ranking/sort-by path, because it had only ever been
+tested with single-position filters (['GK'], ['ST']) before. Confirmed
+directly: player ID 953 holds three positions (LW, RW, ST), so filtering
+for ['LW', 'RW'] matched them twice, occupying 2 of 5 ranked slots and
+silently reducing the result to 4 unique players.
+
+### 14.3 Fix attempt 1 (failed) and fix attempt 2 (worked)
+First attempt: add `.distinct()` before `.limit()`. This failed with a
+Postgres error -- `SELECT DISTINCT` requires all `ORDER BY` columns to
+appear in the `SELECT` list, which conflicts with sorting by a joined
+stat column (e.g. `player_stats.pace`) while only selecting `players.id`.
+
+Working fix: deduplicate in Python instead of SQL. Over-fetch (3x top_k)
+from the already-correctly-sorted query, then filter duplicates while
+preserving order, stopping once top_k unique IDs are collected.
+
+### 14.4 Verification
+Confirmed: 5 distinct player IDs returned for the same LW/RW pace-sort
+query that previously returned only 4 unique players (with one
+duplicate).
+
+### 14.5 Takeaway
+Second bug in this session caught only via a holistic, varied quality
+pass rather than the standard eval set -- neither the original sort-by
+verification (§6.3, single positions only) nor this bug's sibling fix in
+aggregation (§7.6) tested the specific combination of multi-position
+filtering + sort-by ranking together.
+
+## 15. Accent-Insensitive & Typo-Tolerant Name Matching
+
+### 15.1 Problem
+`find_player_name_matches()` used exact/substring `ilike()` matching only.
+Two real gaps: (1) accented names failed to match their unaccented
+spelling (e.g. "Mbappe" would not find "Mbappé"), and (2) minor
+misspellings failed entirely (e.g. "Mesi" would not find "Messi"),
+returning a "not found" answer for names a real user would very plausibly
+type.
+
+### 15.2 Design evolution (three iterations, each caught a real regression)
+
+**Iteration 1**: added accent-stripping (Python `unicodedata`, stdlib) to
+the existing substring match, plus a `difflib`-based fuzzy fallback
+(stdlib) for when substring matching found nothing.
+*Result*: fixed accents correctly, but fuzzy fallback never triggered for
+short names like "Mesi"/"Renaldo" -- substring matching found spurious
+matches first (e.g. "Mesi" matched inside "Damesio"), stopping the
+pipeline from ever reaching the better fuzzy layer.
+
+**Iteration 2**: reordered to fuzzy-first, substring-fallback. Also
+stripped "X. " initial-prefixes (e.g. "L. Messi" -> "Messi") before
+fuzzy comparison, since comparing a short query against a longer
+prefixed string was artificially lowering the similarity ratio below
+the 0.7 cutoff.
+*Result*: fixed "Mesi" -> Messi and most typos, but introduced a new
+regression -- the exact, correctly-spelled query "Ronaldo" stopped
+finding Cristiano Ronaldo entirely. Root cause: his `short_name` is
+literally "Cristiano Ronaldo" (no initial-prefix format), so prefix-
+stripping didn't apply, and the length mismatch against a 7-letter
+query dragged his similarity below threshold -- an obscure player
+literally named "Ronaldo" then dominated the fuzzy results instead.
+
+**Iteration 3 (final)**: whole-word substring match FIRST (word-boundary
+regex, not raw substring), fuzzy match as fallback only if no whole-word
+match exists at all. This fixes both problems simultaneously: "Ronaldo"
+as a whole word correctly matches within "Cristiano Ronaldo" (word
+boundaries respected), while "Mesi" is not a whole word within "Damesio"
+so it correctly falls through to fuzzy matching, which finds "Messi".
+
+### 15.3 Verification
+Brutal test battery, 17 real-world cases (accents, common misspellings,
+spacing variants) covering major players (Mbappé, Messi, Ronaldo,
+Neymar, Haaland, Salah, Modrić, Kane, De Bruyne) plus their common typo
+forms: 15/17 fully correct.
+
+One known, accepted non-fix: "Renaldo" (typo) returns "Renaldo Justinho"
+(a real player whose actual first name is "Renaldo") rather than
+Cristiano Ronaldo. This is a genuine name collision, not a matching
+defect -- an exact whole-word match to a real player's real name
+correctly takes priority over guessing the query is a typo for someone
+else. No further action planned; flagged as a known, deliberate
+limitation.
+
+### 15.4 Implementation notes
+- No new dependencies: accent-stripping uses stdlib `unicodedata`, fuzzy
+  matching uses stdlib `difflib`.
+- Performance tradeoff: whole-word matching requires fetching all
+  players with a non-null `short_name` into Python (rather than a pure
+  SQL `ilike`), since accent-stripping happens client-side. Measured at
+  ~0.6-1.2s per lookup against 31k+ players -- acceptable at this scale
+  and traffic level, but would need a DB-side solution (e.g. Postgres
+  `unaccent` extension) if this needs to scale significantly further.
+
