@@ -669,6 +669,7 @@ All code (`tracing.py`, `instrumented_service.py`, `eval_trulens_runner.py`,
 `test_trulens_single.py`) is left in place, functional as documented above,
 for whoever picks this back up.
 
+
 ## 10. Rate Limiting on /ask
 
 ### 10.1 Problem
@@ -940,3 +941,4 @@ limitation.
   ~0.6-1.2s per lookup against 31k+ players -- acceptable at this scale
   and traffic level, but would need a DB-side solution (e.g. Postgres
   `unaccent` extension) if this needs to scale significantly further.
+

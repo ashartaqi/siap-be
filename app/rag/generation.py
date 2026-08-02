@@ -14,6 +14,10 @@ RETRYABLE_ERROR_MARKERS = ("503", "UNAVAILABLE", "overloaded")
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 3
 
+def _is_retryable(error: Exception) -> bool:
+    msg = str(error)
+    return any(marker in msg for marker in RETRYABLE_ERROR_MARKERS)
+
 
 def _is_retryable(error: Exception) -> bool:
     msg = str(error)
@@ -55,7 +59,6 @@ def generate_answer(
         f"Question: {question}"
     )
 
-    # ... rest (retry loop) unchanged
 
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
