@@ -940,3 +940,68 @@ limitation.
   ~0.6-1.2s per lookup against 31k+ players -- acceptable at this scale
   and traffic level, but would need a DB-side solution (e.g. Postgres
   `unaccent` extension) if this needs to scale significantly further.
+
+
+## 16. Small-Talk Heuristic
+
+### 16.1 Problem
+
+No handling existed for non-football messages ("hi", "how are you?",
+"thanks!"). `extraction_heuristic.py` correctly skips constraint
+extraction for these (no trigger signals present), but the question
+still fell through to full retrieval: an embedding call against the
+question text, a vector search returning semantically arbitrary player
+documents, and a full Gemini generation call asked to answer from that
+irrelevant context.
+
+### 16.2 Verification of the failure mode before fixing
+
+Tested directly against a live pipeline call ("hi, how are you?")
+before writing any fix, per this project's standard of confirming root
+cause over assuming it. Result: Gemini did not hallucinate from the
+irrelevant context (retrieved a random CB and GK, correctly ignored
+them, and replied appropriately) -- so this was not the demo-breaking
+failure initially suspected. It was, however, a real and unnecessary
+cost: one wasted embedding/vector search plus one full Gemini
+generation call, on a free tier that has repeatedly constrained this
+project's iteration speed (§10-§12).
+
+### 16.3 Design
+
+Added `small_talk_heuristic.py`, modeled directly on the existing
+`extraction_heuristic.py` pattern: cheap, local, zero-LLM-cost, checked
+before anything else in `ask_siap()`. Deliberately conservative in the
+opposite direction from the extraction heuristic -- there, a false
+"needs extraction" only costs quota; here, a false "this is small talk"
+would silently swallow a real football question, which is the worse
+failure. The regex requires the *entire* stripped message to consist
+of one or more matched small-talk phrases -- a message like "hi, how
+many strikers are over 90 pace?" does not match, since real content
+follows the greeting.
+
+### 16.4 Bug found during free verification
+
+Initial regex only matched a single small-talk phrase anchored
+start-to-end, so "hi" and "how are you?" each matched alone, but "hi,
+how are you?" (two phrases in sequence) did not. Caught by an 8-case
+test battery before any live wiring -- fixed by allowing one or more
+matched phrases in sequence, separated by whitespace/punctuation.
+Final battery: 8/8 correct, including the negative cases ("hi, how
+many strikers are over 90 pace?", "hey, tell me about Messi" -- both
+correctly NOT treated as small talk).
+
+### 16.5 Verification
+
+Live pipeline call ("hi, how are you?") after wiring: returned
+instantly with the canned response, no HuggingFace embedding model
+load, no Gemini call, `degraded: False`, empty `sources` -- confirmed
+short-circuiting works end to end, not just in isolation.
+
+### 16.6 Process note
+
+This change was made directly on `main` initially (an accidental
+deviation from this project's own branch/PR convention, caught mid-
+session) -- corrected by moving uncommitted changes to
+`feature/small-talk-heuristic` before committing. Merged via PR into
+`main`, branch deleted post-merge, consistent with the rest of this
+project's workflow.
